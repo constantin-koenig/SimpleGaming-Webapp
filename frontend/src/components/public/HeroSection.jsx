@@ -1,4 +1,6 @@
+// frontend/src/components/public/HeroSection.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 
 const HeroSection = ({ isVisible }) => {
   // Typer-Effekt für Hero-Sektion

@@ -9,22 +9,25 @@ import TestimonialSlider from '../../components/public/TestimonialSlider';
 import StatsCounter from '../../components/public/StatsCounter';
 import EventPreview from '../../components/public/EventPreview';
 import CommunityCarousel from '../../components/public/CommunityCarousel';
+import HeroSection from '../../components/public/HeroSection';
+import FeaturesSection from '../../components/public/FeaturesSection';
+import CommunityRulesSection from '../../components/public/CommunityRulesSection';
+import FeaturedStreamer from '../../components/public/FeaturedStreamer';
 
 const HomePage = () => {
   // State für Animationen
   const [isVisible, setIsVisible] = useState({
     hero: false,
     features: false,
+    rules: false,
     games: false,
     stats: false,
     events: false,
     community: false,
     testimonials: false,
+    streamers: false,
     cta: false
   });
-  
-  // Refs für Parallax-Effekt
-  const parallaxRef = useRef(null);
   
   // Discord Auth URL
   const discordAuthUrl = 'http://localhost:5000/api/auth/discord';
@@ -37,16 +40,16 @@ const HomePage = () => {
       // Hero Section (sofort sichtbar)
       setIsVisible(prev => ({ ...prev, hero: true }));
       
-      // Parallax-Effekt
-      if (parallaxRef.current) {
-        const offset = window.pageYOffset;
-        parallaxRef.current.style.transform = `translateY(${offset * 0.5}px)`;
-      }
-      
       // Features Section
       const featuresSection = document.getElementById('features');
       if (featuresSection && scrollPosition > featuresSection.offsetTop + 100) {
         setIsVisible(prev => ({ ...prev, features: true }));
+      }
+      
+      // Rules Section
+      const rulesSection = document.getElementById('rules');
+      if (rulesSection && scrollPosition > rulesSection.offsetTop + 100) {
+        setIsVisible(prev => ({ ...prev, rules: true }));
       }
       
       // Games Section
@@ -73,6 +76,12 @@ const HomePage = () => {
         setIsVisible(prev => ({ ...prev, community: true }));
       }
       
+      // Streamers Section
+      const streamersSection = document.getElementById('streamers');
+      if (streamersSection && scrollPosition > streamersSection.offsetTop + 100) {
+        setIsVisible(prev => ({ ...prev, streamers: true }));
+      }
+      
       // Testimonials Section
       const testimonialsSection = document.getElementById('testimonials');
       if (testimonialsSection && scrollPosition > testimonialsSection.offsetTop + 100) {
@@ -95,26 +104,6 @@ const HomePage = () => {
     // Event Listener entfernen
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-  
-  // Typer-Effekt für Hero-Sektion
-  const [typedText, setTypedText] = useState('');
-  const fullText = 'Gaming-Erlebnis';
-  
-  useEffect(() => {
-    if (isVisible.hero) {
-      let i = 0;
-      const typingInterval = setInterval(() => {
-        if (i < fullText.length) {
-          setTypedText(fullText.substring(0, i + 1));
-          i++;
-        } else {
-          clearInterval(typingInterval);
-        }
-      }, 100);
-      
-      return () => clearInterval(typingInterval);
-    }
-  }, [isVisible.hero]);
   
   // Beliebte Spiele in der Community
   const popularGames = [
@@ -244,182 +233,45 @@ const HomePage = () => {
       text: 'Die Gameserver sind super stabil und die Admins kümmern sich gut um die Community. Immer gerne dabei!'
     }
   ];
-  
-  // Animation für schwebende Elemente
-  const floatingAnimation = {
-    y: [0, -10, 0],
-    transition: {
-      duration: 2,
-      repeat: Infinity,
-      ease: "easeInOut"
+
+  // Featured Streamers
+  const featuredStreamers = [
+    {
+      id: 1,
+      name: 'NinjaGirl',
+      avatar: 'https://via.placeholder.com/100',
+      game: 'Valorant',
+      followers: 25600,
+      quote: 'Ich streame jeden Tag für die beste Community da draußen!'
+    },
+    {
+      id: 2,
+      name: 'ProGamer99',
+      avatar: 'https://via.placeholder.com/100',
+      game: 'League of Legends',
+      followers: 18300,
+      quote: 'SimpleGaming gibt mir die Motivation, jeden Tag besser zu werden.'
+    },
+    {
+      id: 3,
+      name: 'MineKing42',
+      avatar: 'https://via.placeholder.com/100',
+      game: 'Minecraft',
+      followers: 12500,
+      quote: 'Kreativität kennt keine Grenzen - genau wie diese Community!'
     }
-  };
+  ];
   
   return (
     <PublicLayout>
       {/* Hero Section mit erweiterten Animationen */}
-      <div 
-        className={`relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary-900 to-primary-700 dark:from-primary-900 dark:to-primary-800 transition-opacity duration-1000 ${isVisible.hero ? 'opacity-100' : 'opacity-0'}`}
-      >
-        {/* Floating Gaming Icons - als zusätzliche Animation */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute inset-0 bg-[url('/assets/gaming-pattern.svg')] opacity-10"></div>
-          
-          {/* Animierte Partikel */}
-          <div className="gaming-particles"></div>
-          
-          {/* Schwebende Icons */}
-          <div className="absolute top-1/4 left-1/4 w-16 h-16 text-primary-300 opacity-20 float-animation" style={{animationDelay: "0s"}}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M11.5 6.027a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zm-1.5 1.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1zm2.5-.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zm-1.5 1.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1zm-6.5-3h1v1h1v1h-1v1h-1v-1H3v-1h1v-1z"/>
-              <path d="M13.991 3H2c-.325 0-.502.078-.602.145a.758.758 0 0 0-.254.302A1.46 1.46 0 0 0 1 4.01V10c0 .325.078.502.145.602.07.105.17.188.302.254a1.464 1.464 0 0 0 .538.143L2.01 11H14c.325 0 .502-.078.602-.145a.758.758 0 0 0 .254-.302 1.464 1.464 0 0 0 .143-.538L15 9.99V4c0-.325-.078-.502-.145-.602a.757.757 0 0 0-.302-.254A1.46 1.46 0 0 0 13.99 3zM14 2H2C0 2 0 4 0 4v6c0 2 2 2 2 2h12c2 0 2-2 2-2V4c0-2-2-2-2-2z"/>
-            </svg>
-          </div>
-          
-          <div className="absolute top-1/3 right-1/4 w-12 h-12 text-primary-300 opacity-20 float-animation" style={{animationDelay: "0.5s"}}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M4 2v2H2V2h2zm1 12v-2a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zm0-5V7a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zm5 5v-2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zm0-5V7a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zm5 5v-2a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zm0-5V7a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zM5 2h6v2H5V2zm4 0h2v2H9V2zM8 2h1v2H8V2z"/>
-            </svg>
-          </div>
-          
-          <div className="absolute bottom-1/3 left-1/5 w-20 h-20 text-primary-300 opacity-20 float-animation" style={{animationDelay: "1s"}}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M12.5 3a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h5zm0 3a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h5zm.5 3.5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 .5-.5zm-.5 2.5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h5z"/>
-              <path d="M16 2a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2zM4 1v14H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h2zm1 0h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5V1z"/>
-            </svg>
-          </div>
-          
-          <div className="absolute bottom-1/4 right-1/5 w-16 h-16 text-primary-300 opacity-20 float-animation" style={{animationDelay: "1.5s"}}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.09z"/>
-            </svg>
-          </div>
-        </div>
-        
-        {/* Parallax Tiefen-Effekt */}
-        <div ref={parallaxRef} className="absolute inset-0 opacity-20">
-          <div className="absolute top-1/4 left-1/3 w-64 h-64 bg-primary-500 rounded-full filter blur-3xl"></div>
-          <div className="absolute bottom-1/4 right-1/3 w-96 h-96 bg-purple-500 rounded-full filter blur-3xl"></div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 z-10 text-center py-20">
-          <div className={`transform transition-all duration-1000 delay-300 ${isVisible.hero ? 'scale-100 opacity-100' : 'scale-90 opacity-0'}`}>
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-white mb-6 tracking-tight">
-              <span className="block">Level up dein</span>
-              <span className="block mt-2 text-primary-300 dark:text-primary-300">
-                <span className="typewriter inline-block">{typedText}</span>
-                <span className="animate-pulse">|</span>
-              </span>
-            </h1>
-            
-            <p className="mt-6 max-w-lg mx-auto text-xl text-white text-opacity-80 sm:max-w-3xl">
-              Tritt der SimpleGaming Community bei, finde neue Freunde und erlebe unvergessliche Spielmomente zusammen!
-            </p>
-            
-            <div className="mt-10 max-w-sm mx-auto sm:max-w-none sm:flex sm:justify-center">
-              <div className="space-y-4 sm:space-y-0 sm:mx-auto sm:inline-grid sm:grid-cols-2 sm:gap-5">
-                <a
-                  href={discordAuthUrl}
-                  className="flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 md:py-4 md:text-lg md:px-10 shadow-lg hover:shadow-xl transform transition hover:-translate-y-1 hover:scale-105 pulse-animation"
-                >
-                  <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0c-.164-.386-.398-.875-.608-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"></path>
-                  </svg>
-                  Discord beitreten
-                </a>
-                <Link
-                  to="/about"
-                  className="flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-primary-600 bg-white hover:bg-gray-50 md:py-4 md:text-lg md:px-10 shadow-lg hover:shadow-xl transform transition hover:-translate-y-1 hover:scale-105"
-                >
-                  <span className="mr-2">Mehr erfahren</span>
-                  <svg className="w-5 h-5 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </Link>
-              </div>
-            </div>
-          </div>
-          
-          {/* Scroll-Down Indikator mit Pulsieren */}
-          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2">
-            <div className="animate-bounce bg-white dark:bg-gray-800 p-2 w-10 h-10 ring-1 ring-slate-900/5 dark:ring-slate-200/20 shadow-lg rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
+      <HeroSection isVisible={isVisible.hero} />
       
-      {/* Features Section mit verbesserten Animationen und 3D-Effekten */}
-      <div 
-        id="features" 
-        className={`py-16 bg-light-bg-primary dark:bg-dark-bg-primary transition-all duration-1000 ${isVisible.features ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="lg:text-center">
-            <h2 className="text-base text-primary-600 dark:text-primary-400 font-semibold tracking-wide uppercase gradient-text">Features</h2>
-            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl">
-              Was SimpleGaming bietet
-            </p>
-            <p className="mt-4 max-w-2xl text-xl text-light-text-secondary dark:text-dark-text-secondary lg:mx-auto">
-              Unsere Plattform vereint alles, was Gamer brauchen
-            </p>
-          </div>
-
-          <div className="mt-16">
-            <div className="space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-x-8">
-              {/* Feature 1 - mit 3D Rotationseffekt */}
-              <div className="group">
-                <div className="relative perspective">
-                  <div className="feature-card relative p-6 bg-light-bg-secondary dark:bg-dark-bg-secondary rounded-xl shadow-xl transform-gpu transition-all duration-500 group-hover:rotate-y-12 group-hover:scale-105">
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity"></div>
-                    <div className="flex items-center justify-center h-16 w-16 rounded-md bg-primary-500 text-white mb-4 mx-auto group-hover:bg-primary-600 transition-colors">
-                      <svg className="h-8 w-8 transform transition-transform group-hover:scale-110 group-hover:rotate-12" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                    <h3 className="mt-2 text-center text-2xl font-bold text-light-text-primary dark:text-dark-text-primary neon-glow">Gaming-Partner finden</h3>
-                    <p className="mt-4 text-center text-light-text-secondary dark:text-dark-text-secondary">
-                      Mit unserem Buddy-Finder-System findest du schnell neue Mitspieler für deine Lieblingsspiele, die zu deinem Spielstil passen.
-                    </p>
-                    <div className="mt-6 text-center">
-                      <Link to="/about" className="text-primary-600 dark:text-primary-400 hover:text-primary-500 text-sm font-medium group-hover:underline">
-                        Mehr erfahren →
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Feature 3 - mit Glow-Effekt */}
-              <div className="group">
-                <div className="relative perspective">
-                  <div className="feature-card relative p-6 bg-light-bg-secondary dark:bg-dark-bg-secondary rounded-xl shadow-xl transform-gpu transition-all duration-500 group-hover:rotate-y-12 group-hover:scale-105">
-                    {/* Glow-Effekt im Dunkelmodus */}
-                    <div className="absolute inset-0 bg-primary-500 rounded-xl opacity-0 group-hover:opacity-10 transition-opacity dark:group-hover:opacity-20 dark:group-hover:blur-xl"></div>
-                    
-                    <div className="flex items-center justify-center h-16 w-16 rounded-md bg-primary-500 text-white mb-4 mx-auto group-hover:bg-primary-600 transition-colors">
-                      <svg className="h-8 w-8 transform transition-transform group-hover:scale-110 group-hover:rotate-12" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    <h3 className="mt-2 text-center text-2xl font-bold text-light-text-primary dark:text-dark-text-primary neon-glow">Eigene Gameserver</h3>
-                    <p className="mt-4 text-center text-light-text-secondary dark:text-dark-text-secondary">
-                      Spiele auf unseren optimierten Gameservern mit stabiler Performance und individuellen Einstellungen für das beste Spielerlebnis.
-                    </p>
-                    <div className="mt-6 text-center">
-                      <Link to="/about" className="text-primary-600 dark:text-primary-400 hover:text-primary-500 text-sm font-medium group-hover:underline">
-                        Mehr erfahren →
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Features Section mit 3D-Karten und Animationen */}
+      <FeaturesSection id="features" isVisible={isVisible.features} />
+      
+      {/* Community Regeln Section */}
+      <CommunityRulesSection id="rules" isVisible={isVisible.rules} />
       
       {/* Beliebte Spiele Section - mit Hover-Animationen und mehr Tiefe */}
       <div 
@@ -465,7 +317,7 @@ const HomePage = () => {
       {/* Statistik-Section - mit verbesserten Animationen */}
       <div 
         id="stats" 
-        className={`py-20 bg-gradient-to-r from-primary-700 to-primary-900 transition-all duration-1000 ${isVisible.stats ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
+        className={`py-20 bg-gradient-to-r from-primary-700 to-primary-900 transition-all duration-1000 relative ${isVisible.stats ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
       >
         {/* Wellige obere Kante */}
         <div className="absolute left-0 right-0 -mt-20 h-20 overflow-hidden">
@@ -535,8 +387,46 @@ const HomePage = () => {
           </div>
         </div>
       </div>
+
+      {/* Featured Streamers Section */}
+      <div 
+        id="streamers" 
+        className={`py-16 bg-gradient-to-br from-light-bg-secondary to-light-bg-tertiary dark:from-dark-bg-secondary dark:to-dark-bg-tertiary transition-all duration-1000 pattern-fade ${isVisible.streamers ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="lg:text-center mb-12">
+            <h2 className="text-base text-primary-600 dark:text-primary-400 font-semibold tracking-wide uppercase gradient-text">Streamer</h2>
+            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl neon-glow">
+              Unsere Featured Streamer
+            </p>
+            <p className="mt-4 max-w-2xl text-xl text-light-text-secondary dark:text-dark-text-secondary lg:mx-auto">
+              Schau dir die Streams unserer Community-Mitglieder an und unterstütze lokale Talente!
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {featuredStreamers.map((streamer, index) => (
+              <FeaturedStreamer 
+                key={streamer.id} 
+                streamer={streamer} 
+                delay={index * 150} 
+                isVisible={isVisible.streamers} 
+              />
+            ))}
+          </div>
+          
+          <div className="mt-12 text-center">
+            <button className="group inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg transition transform hover:-translate-y-1 pulse-animation">
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43z"/>
+              </svg>
+              Alle Streamer entdecken
+            </button>
+          </div>
+        </div>
+      </div>
       
-      {/* Community Carousel Section - NEU! */}
+      {/* Community Carousel Section */}
       <div 
         id="community" 
         className={`py-16 bg-light-bg-secondary dark:bg-dark-bg-secondary transition-all duration-1000 pattern-fade ${isVisible.community ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -620,6 +510,60 @@ const HomePage = () => {
                   Discord beitreten
                 </a>
               </div>
+            </div>
+          </div>
+          
+          {/* Stick Figure Scene - Fun Gaming Session */}
+          <div className="mt-10">
+            <div className="relative flex justify-center">
+              <svg viewBox="0 0 300 100" className="w-full max-w-lg opacity-40">
+                {/* Gaming Table */}
+                <rect x="100" y="80" width="100" height="5" rx="2" fill="#FFFFFF" />
+                
+                {/* Player 1 - Left */}
+                <g className="animate-pulse" style={{animationDuration: "3s"}}>
+                  <circle cx="80" cy="40" r="8" stroke="#FFFFFF" strokeWidth="2" fill="none" />
+                  <line x1="80" y1="48" x2="80" y2="65" stroke="#FFFFFF" strokeWidth="2" />
+                  <line x1="80" y1="52" x2="70" y2="60" stroke="#FFFFFF" strokeWidth="2" />
+                  <line x1="80" y1="52" x2="90" y2="65" stroke="#FFFFFF" strokeWidth="2" /> {/* Arm to controller */}
+                  <line x1="80" y1="65" x2="70" y2="85" stroke="#FFFFFF" strokeWidth="2" />
+                  <line x1="80" y1="65" x2="90" y2="85" stroke="#FFFFFF" strokeWidth="2" />
+                  
+                  {/* Happy Face */}
+                  <circle cx="77" cy="38" r="1" fill="#FFFFFF" />
+                  <circle cx="83" cy="38" r="1" fill="#FFFFFF" />
+                  <path d="M77,43 Q80,46 83,43" stroke="#FFFFFF" strokeWidth="1" fill="none" />
+                </g>
+                
+                {/* Player 2 - Right */}
+                <g className="animate-pulse" style={{animationDuration: "2.5s", animationDelay: "0.5s"}}>
+                  <circle cx="220" cy="40" r="8" stroke="#FFFFFF" strokeWidth="2" fill="none" />
+                  <line x1="220" y1="48" x2="220" y2="65" stroke="#FFFFFF" strokeWidth="2" />
+                  <line x1="220" y1="52" x2="230" y2="60" stroke="#FFFFFF" strokeWidth="2" />
+                  <line x1="220" y1="52" x2="210" y2="65" stroke="#FFFFFF" strokeWidth="2" /> {/* Arm to controller */}
+                  <line x1="220" y1="65" x2="210" y2="85" stroke="#FFFFFF" strokeWidth="2" />
+                  <line x1="220" y1="65" x2="230" y2="85" stroke="#FFFFFF" strokeWidth="2" />
+                  
+                  {/* Happy Face */}
+                  <circle cx="217" cy="38" r="1" fill="#FFFFFF" />
+                  <circle cx="223" cy="38" r="1" fill="#FFFFFF" />
+                  <path d="M217,43 Q220,46 223,43" stroke="#FFFFFF" strokeWidth="1" fill="none" />
+                </g>
+                
+                {/* Game Screen/Monitor */}
+                <rect x="125" y="50" width="50" height="30" rx="2" fill="#FFFFFF" opacity="0.2" className="animate-pulse" />
+                
+                {/* Game Console */}
+                <rect x="140" y="85" width="20" height="5" rx="1" fill="#FFFFFF" opacity="0.7" />
+                
+                {/* Controllers */}
+                <rect x="95" y="65" width="15" height="8" rx="2" fill="#FFFFFF" opacity="0.5" />
+                <rect x="190" y="65" width="15" height="8" rx="2" fill="#FFFFFF" opacity="0.5" />
+                
+                {/* Effect Stars - Excitement */}
+                <path d="M120,30 L122,35 L127,37 L122,39 L120,44 L118,39 L113,37 L118,35 Z" fill="#FFFFFF" opacity="0.5" className="animate-ping" style={{animationDuration: "2s"}} />
+                <path d="M180,35 L182,40 L187,42 L182,44 L180,49 L178,44 L173,42 L178,40 Z" fill="#FFFFFF" opacity="0.5" className="animate-ping" style={{animationDuration: "2.5s"}} />
+              </svg>
             </div>
           </div>
         </div>

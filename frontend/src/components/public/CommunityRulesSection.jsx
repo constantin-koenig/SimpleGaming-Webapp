@@ -1,3 +1,4 @@
+// frontend/src/components/public/CommunityRulesSection.jsx
 import React, { useState } from 'react';
 
 const CommunityRulesSection = ({ isVisible }) => {
@@ -387,6 +388,7 @@ const CommunityRulesSection = ({ isVisible }) => {
   
   return (
     <div 
+      id="rules"
       className={`py-16 bg-light-bg-primary dark:bg-dark-bg-primary transition-all duration-1000 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -1,3 +1,4 @@
+// frontend/src/components/public/FeaturesSection.jsx
 import React from 'react';
 import StickFigureAnimation from './StickFigureAnimation';
 
@@ -59,12 +60,6 @@ const FeaturesSection = ({ isVisible }) => {
                       description={feature.description}
                       isVisible={isVisible}
                     />
-                    
-                    <div className="mt-6 text-center">
-                      <a href="#" className="text-primary-600 dark:text-primary-400 hover:text-primary-500 text-sm font-medium group-hover:underline">
-                        Mehr erfahren →
-                      </a>
-                    </div>
                   </div>
                 </div>
               </div>
