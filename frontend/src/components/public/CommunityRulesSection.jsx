@@ -3,30 +3,40 @@ import React, { useState, useEffect } from 'react';
 
 const CommunityRulesSection = ({ isVisible }) => {
   const [activeRule, setActiveRule] = useState(0);
-  const [animationState, setAnimationState] = useState(1);
-  const [animationTimerActive, setAnimationTimerActive] = useState(true);
+  const [animationState, setAnimationState] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
   
-  // Automatisch zwischen Animationszuständen wechseln, wenn eine Regel aktiv ist
+  // Animation nur starten, wenn Komponente sichtbar ist
   useEffect(() => {
-    if (!isVisible || !animationTimerActive) return;
+    if (isVisible) {
+      setAnimationState(1);
+      setIsAnimating(true);
+    } else {
+      setIsAnimating(false);
+      setAnimationState(0);
+    }
+  }, [isVisible]);
+  
+  // Automatisch zwischen Animationszuständen wechseln, wenn sichtbar und Animation aktiv
+  useEffect(() => {
+    if (!isVisible || !isAnimating) return;
     
-    const maxFrames = 4; // Maximale Anzahl an Animationsframes
+    const maxFrames = 4;
     const interval = setInterval(() => {
-      setAnimationState(prev => (prev % maxFrames) + 1);
+      setAnimationState(prev => {
+        const next = (prev % maxFrames) + 1;
+        // Bei letztem Frame Animation pausieren
+        if (next === maxFrames) {
+          setTimeout(() => {
+            setAnimationState(1);
+          }, 2000);
+        }
+        return next;
+      });
     }, 1500);
     
     return () => clearInterval(interval);
-  }, [isVisible, animationTimerActive]);
-  
-  // Animation neu starten, wenn eine Regel angeklickt wird
-  const handleRuleClick = (index) => {
-    setActiveRule(index);
-    setAnimationState(1);
-    
-    // Timer kurz pausieren und dann neu starten
-    setAnimationTimerActive(false);
-    setTimeout(() => setAnimationTimerActive(true), 100);
-  };
+  }, [isVisible, isAnimating, activeRule]);
   
   const rules = [
     {
@@ -349,7 +359,7 @@ const CommunityRulesSection = ({ isVisible }) => {
     </div>
   );
   
-  // Verbesserte Animation für Hilfsbereitschaft
+  // NEUE Animation für Hilfsbereitschaft
   const renderHelpfulnessAnimation = () => (
     <div className="h-48 w-48 mx-auto relative">
       <svg viewBox="0 0 100 100" className="w-full h-full filter drop-shadow-lg">
@@ -362,124 +372,195 @@ const CommunityRulesSection = ({ isVisible }) => {
         </defs>
         <circle cx="50" cy="50" r="40" fill="url(#helpGlow)" className={animationState >= 3 ? "animate-pulse" : ""} />
         
-        {/* Erfahrener Spieler - klarer dargestellt */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-4' : 'transform translate-x-10'}`}>
-          {/* Körper */}
-          <circle cx="35" cy="35" r="8" stroke="#EAB308" strokeWidth="2" fill="none" />
-          <line x1="35" y1="43" x2="35" y2="60" stroke="#EAB308" strokeWidth="2" />
-          <line x1="35" y1="60" x2="25" y2="75" stroke="#EAB308" strokeWidth="2" />
-          <line x1="35" y1="60" x2="45" y2="75" stroke="#EAB308" strokeWidth="2" />
-          
-          {/* Abzeichen für Erfahrung - deutlicher */}
-          {animationState >= 2 && (
-            <g>
-              <circle cx="35" cy="20" r="5" fill="#FBBF24" fillOpacity="0.3" stroke="#FBBF24" strokeWidth="1" />
-              <text x="35" y="22" fontSize="7" textAnchor="middle" fill="#EAB308" fontWeight="bold">★</text>
+        {/* Tutorialumgebung - erscheint allmählich */}
+        {animationState >= 1 && (
+          <g className="transition-all duration-500">
+            {/* Bücher/Ressourcen unten */}
+            <rect 
+              x="35" 
+              y="75" 
+              width="30" 
+              height="8" 
+              rx="2" 
+              fill="#EAB308" 
+              fillOpacity="0.2" 
+              stroke="#EAB308" 
+              strokeWidth="1" 
+            />
+            {/* Bücherstapel */}
+            <g className={`transition-all duration-300 ${animationState >= 2 ? 'opacity-100' : 'opacity-30'}`}>
+              <rect x="68" y="65" width="15" height="4" rx="1" fill="#3B82F6" fillOpacity="0.3" stroke="#3B82F6" strokeWidth="0.5" />
+              <rect x="70" y="61" width="15" height="4" rx="1" fill="#EF4444" fillOpacity="0.3" stroke="#EF4444" strokeWidth="0.5" />
+              <rect x="72" y="57" width="15" height="4" rx="1" fill="#10B981" fillOpacity="0.3" stroke="#10B981" strokeWidth="0.5" />
             </g>
-          )}
-          
-          {/* Bücher/Wissen Symbol */}
-          {animationState >= 2 && (
-            <g className={animationState >= 3 ? "animate-pulse" : ""} style={{animationDuration: "2s"}}>
-              <rect x="22" y="48" width="6" height="8" fill="#FBBF24" fillOpacity="0.3" stroke="#FBBF24" strokeWidth="0.5" />
-              <rect x="21" y="47" width="6" height="8" fill="#FBBF24" fillOpacity="0.4" stroke="#FBBF24" strokeWidth="0.5" />
-              <rect x="20" y="46" width="6" height="8" fill="#FBBF24" fillOpacity="0.5" stroke="#FBBF24" strokeWidth="0.5" />
-            </g>
-          )}
-          
-          {/* Arme - deutlichere Erklärgesten */}
-          {animationState >= 3 ? (
-            <>
-              <line x1="35" y1="50" x2="48" y2="55" stroke="#EAB308" strokeWidth="2" className="origin-top-right transition-all duration-500" />
-              <line x1="35" y1="50" x2="48" y2="45" stroke="#EAB308" strokeWidth="2" className="origin-top-right transition-all duration-500" />
-            </>
-          ) : (
-            <>
-              <line x1="35" y1="50" x2="20" y2="50" stroke="#EAB308" strokeWidth="2" className="origin-top-left transition-all duration-500" />
-              <line x1="35" y1="50" x2="45" y2="55" stroke="#EAB308" strokeWidth="2" />
-            </>
-          )}
-          
-          {/* Erfahrenes (lächelndes) Gesicht */}
-          <circle cx="32" cy="33" r="1.5" fill="#EAB308" />
-          <circle cx="38" cy="33" r="1.5" fill="#EAB308" />
-          <path d={animationState >= 3 ? "M32,37 Q35,40 38,37" : "M32,37 Q35,39 38,37"} 
-            stroke="#EAB308" 
-            strokeWidth="1.5" 
-            fill="none"
-            className="transition-all duration-300" 
-          />
-          
-          {/* Wissens-Strahlen - erscheinen in Phase 4 */}
-          {animationState === 4 && (
-            <g>
-              <line x1="28" y1="20" x2="25" y2="17" stroke="#FBBF24" strokeWidth="1" className="animate-ping" style={{animationDuration: "1s"}} />
-              <line x1="35" y1="15" x2="35" y2="12" stroke="#FBBF24" strokeWidth="1" className="animate-ping" style={{animationDuration: "1.2s"}} />
-              <line x1="42" y1="20" x2="45" y2="17" stroke="#FBBF24" strokeWidth="1" className="animate-ping" style={{animationDuration: "0.8s"}} />
-            </g>
-          )}
-        </g>
+          </g>
+        )}
         
-        {/* Neuer Spieler - klarer dargestellt */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0 scale-90' : 'transform -translate-x-5 scale-90'}`}>
-          {/* Körper */}
-          <circle cx="65" cy="38" r="7" stroke="#3B82F6" strokeWidth="2" fill="none" />
-          <line x1="65" y1="45" x2="65" y2="60" stroke="#3B82F6" strokeWidth="2" />
-          <line x1="65" y1="60" x2="58" y2="73" stroke="#3B82F6" strokeWidth="2" />
-          <line x1="65" y1="60" x2="72" y2="73" stroke="#3B82F6" strokeWidth="2" />
+        {/* Erfahrener Mentor */}
+        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0' : 'transform translate-x-8'}`}>
+          <circle cx="30" cy="40" r="8" stroke="#EAB308" strokeWidth="2" fill="none" />
+          <line x1="30" y1="48" x2="30" y2="65" stroke="#EAB308" strokeWidth="2" />
+          <line x1="30" y1="65" x2="22" y2="80" stroke="#EAB308" strokeWidth="2" />
+          <line x1="30" y1="65" x2="38" y2="80" stroke="#EAB308" strokeWidth="2" />
           
-          {/* Fragezeichen über dem Kopf - deutlicher */}
-          {animationState >= 2 && (
-            <g>
-              <circle cx="65" cy="23" r="5" fill="#3B82F6" fillOpacity="0.3" stroke="#3B82F6" strokeWidth="0.5" />
-              <text x="65" y="26" fontSize="8" textAnchor="middle" fill="#3B82F6" fontWeight="bold">?</text>
-            </g>
-          )}
-          
-          {/* Arme - besser sichtbare Gesten */}
-          {animationState >= 3 ? (
+          {/* Arme - unterschiedliche Positionen je nach Animationsstatus */}
+          {animationState < 3 ? (
             <>
-              <line x1="65" y1="52" x2="52" y2="50" stroke="#3B82F6" strokeWidth="2" className="origin-top-left transition-all duration-500" />
-              <line x1="65" y1="52" x2="52" y2="55" stroke="#3B82F6" strokeWidth="2" className="origin-top-left transition-all duration-500" />
+              <line x1="30" y1="53" x2="20" y2="60" stroke="#EAB308" strokeWidth="2" />
+              <line x1="30" y1="53" x2="40" y2="55" stroke="#EAB308" strokeWidth="2" />
             </>
           ) : (
             <>
-              <line x1="65" y1="52" x2="55" y2="57" stroke="#3B82F6" strokeWidth="2" />
-              <line x1="65" y1="52" x2="75" y2="57" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="30" y1="53" x2="20" y2="60" stroke="#EAB308" strokeWidth="2" />
+              <line x1="30" y1="53" x2="45" y2="45" stroke="#EAB308" strokeWidth="2" />
             </>
           )}
           
-          {/* Neugieriges/Lernendes Gesicht - ausdrucksvoller */}
-          <circle cx="62" cy="36" r="1" fill="#3B82F6" />
-          <circle cx="68" cy="36" r="1" fill="#3B82F6" />
-          <path d={animationState >= 3 ? "M62,40 Q65,43 68,40" : "M62,40 Q65,41 68,40"} 
-            stroke="#3B82F6" 
+          {/* Gesicht */}
+          <circle cx="27" cy="38" r="1.5" fill="#EAB308" />
+          <circle cx="33" cy="38" r="1.5" fill="#EAB308" />
+          <path 
+            d={animationState >= 3 ? "M27,42 Q30,45 33,42" : "M27,41 Q30,43 33,41"} 
+            stroke="#EAB308" 
             strokeWidth="1.5" 
             fill="none" 
             className="transition-all duration-300"
           />
+          
+          {/* Mentoren-Hut/Abzeichen erscheint bei höheren Animationsstatus */}
+          {animationState >= 3 && (
+            <path 
+              d="M22,33 L30,28 L38,33 L35,35 L30,32 L25,35 Z" 
+              fill="#EAB308" 
+              fillOpacity="0.3" 
+              stroke="#EAB308" 
+              strokeWidth="1"
+            />
+          )}
         </g>
         
-        {/* Wissenstransfer Animation - verbessert */}
+        {/* Lernender Schüler */}
+        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0' : 'transform -translate-x-8'}`}>
+          <circle cx="70" cy="40" r="7" stroke="#3B82F6" strokeWidth="2" fill="none" />
+          <line x1="70" y1="47" x2="70" y2="62" stroke="#3B82F6" strokeWidth="2" />
+          <line x1="70" y1="62" x2="64" y2="75" stroke="#3B82F6" strokeWidth="2" />
+          <line x1="70" y1="62" x2="76" y2="75" stroke="#3B82F6" strokeWidth="2" />
+          
+          {/* Arme - unterschiedliche Positionen */}
+          {animationState < 3 ? (
+            <>
+              <line x1="70" y1="52" x2="63" y2="58" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="70" y1="52" x2="77" y2="58" stroke="#3B82F6" strokeWidth="2" />
+            </>
+          ) : (
+            <>
+              <line x1="70" y1="52" x2="59" y2="48" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="70" y1="52" x2="77" y2="58" stroke="#3B82F6" strokeWidth="2" />
+            </>
+          )}
+          
+          {/* Gesicht - wird fröhlicher */}
+          <circle cx="67" cy="38" r="1.5" fill="#3B82F6" />
+          <circle cx="73" cy="38" r="1.5" fill="#3B82F6" />
+          <path 
+            d={animationState >= 3 ? "M67,42 Q70,45 73,42" : "M67,41 Q70,42 73,41"} 
+            stroke="#3B82F6" 
+            strokeWidth="1.5" 
+            fill="none"
+            className="transition-all duration-300"
+          />
+          
+          {/* Fragezeichen verwandelt sich in Glühbirne */}
+          {animationState >= 2 && (
+            <g className="transition-all duration-500">
+              {animationState < 4 ? (
+                <g>
+                  <circle 
+                    cx="70" 
+                    cy="25" 
+                    r="4" 
+                    fill="#3B82F6" 
+                    fillOpacity="0.2" 
+                    stroke="#3B82F6" 
+                    strokeWidth="0.5"
+                  />
+                  <text x="70" y="27" fontSize="6" textAnchor="middle" fill="#3B82F6" fontWeight="bold">?</text>
+                </g>
+              ) : (
+                <g className="animate-pulse">
+                  <circle 
+                    cx="70" 
+                    cy="25" 
+                    r="4" 
+                    fill="#EAB308" 
+                    fillOpacity="0.3" 
+                    stroke="#EAB308" 
+                    strokeWidth="0.5"
+                  />
+                  <path 
+                    d="M70,23 C69,21 71,21 70,23 M70,24 L70,26 M68.5,22 L67.5,21 M71.5,22 L72.5,21" 
+                    stroke="#EAB308" 
+                    strokeWidth="0.8" 
+                    fill="none" 
+                  />
+                </g>
+              )}
+            </g>
+          )}
+        </g>
+        
+        {/* Wissen/Material wird geteilt */}
         {animationState >= 3 && (
-          <g>
-            {/* Wissenspfeil - deutlicher, mit Partikeln */}
-            <line x1="45" y1="50" x2="55" y2="50" stroke="#EAB308" strokeWidth="1.5" strokeDasharray="2,2" className="animate-pulse" style={{animationDuration: "1.5s"}} />
-            <polygon points="53,47 58,50 53,53" fill="#EAB308" className="animate-pulse" style={{animationDuration: "1.5s"}} />
+          <g className="transition-all duration-500">
+            {/* Wissenstransfer durch visuellen Pfad */}
+            <path 
+              d="M40,45 Q50,35 60,45" 
+              stroke="#EAB308" 
+              strokeWidth="1.5" 
+              strokeDasharray="2,2" 
+              fill="none"
+              className="animate-pulse"
+            />
             
-            {/* Wissens-Partikel */}
-            <circle cx="48" cy="48" r="1" fill="#FBBF24" className="animate-ping" style={{animationDuration: "1.2s"}} />
-            <circle cx="50" cy="52" r="1" fill="#FBBF24" className="animate-ping" style={{animationDuration: "0.8s", animationDelay: "0.3s"}} />
-            <circle cx="52" cy="49" r="1" fill="#FBBF24" className="animate-ping" style={{animationDuration: "1s", animationDelay: "0.5s"}} />
+            {/* Buchsymbol/Dokument */}
+            <g className={`transition-transform duration-300 ${animationState >= 4 ? 'transform translate-y-0 opacity-100' : 'transform translate-y-5 opacity-40'}`}>
+              <rect 
+                x="45" 
+                y="52" 
+                width="10" 
+                height="12" 
+                rx="1" 
+                fill="#FFFFFF" 
+                fillOpacity="0.6" 
+                stroke="#EAB308" 
+                strokeWidth="0.5"
+              />
+              <line x1="47" y1="55" x2="53" y2="55" stroke="#EAB308" strokeWidth="0.5" />
+              <line x1="47" y1="58" x2="53" y2="58" stroke="#EAB308" strokeWidth="0.5" />
+              <line x1="47" y1="61" x2="50" y2="61" stroke="#EAB308" strokeWidth="0.5" />
+            </g>
             
-            {/* Glühbirnen-Moment - verbessert */}
-            {animationState === 4 && (
+            {/* Erfolgseffekt in Phase 4 */}
+            {animationState >= 4 && (
               <g>
-                <circle cx="65" cy="23" r="6" fill="#FBBF24" fillOpacity="0.7" stroke="#FBBF24" strokeWidth="0.5" className="animate-ping" style={{animationDuration: "1.5s"}} />
-                <path d="M65,15 L65,12 M60,15 L58,12 M70,15 L72,12" stroke="#FBBF24" strokeWidth="1" className="animate-pulse" style={{animationDuration: "2s"}} />
-                <text x="65" y="26" fontSize="10" textAnchor="middle" fill="#FBBF24" fontWeight="bold" className="animate-pulse" style={{animationDuration: "1s"}}>
-                  !
-                </text>
+                <path 
+                  d="M50,25 L52,30 L57,30 L53,33 L55,38 L50,35 L45,38 L47,33 L43,30 L48,30 Z" 
+                  fill="#EAB308" 
+                  fillOpacity="0.3" 
+                  className="animate-ping"
+                  style={{animationDuration: "3s"}}
+                />
+                <circle 
+                  cx="50" 
+                  cy="40" 
+                  r="25" 
+                  stroke="#EAB308" 
+                  strokeWidth="1" 
+                  strokeDasharray="3,3" 
+                  fill="none" 
+                  className="animate-pulse"
+                  style={{animationDuration: "3s"}}
+                />
               </g>
             )}
           </g>
@@ -488,7 +569,7 @@ const CommunityRulesSection = ({ isVisible }) => {
     </div>
   );
   
-  // Verbesserte Animation für Fairplay
+  // KOMPLETT NEUE Animation für Fairplay
   const renderFairplayAnimation = () => (
     <div className="h-48 w-48 mx-auto relative">
       <svg viewBox="0 0 100 100" className="w-full h-full filter drop-shadow-lg">
@@ -501,134 +582,212 @@ const CommunityRulesSection = ({ isVisible }) => {
         </defs>
         <circle cx="50" cy="50" r="40" fill="url(#fairplayGlow)" className={animationState >= 3 ? "animate-pulse" : ""} />
         
-        {/* Spielfeld/Spieltisch - verbessert für Kontext */}
-        <rect x="30" y="65" width="40" height="5" rx="2" fill="#6B7280" opacity="0.3" />
-        <ellipse cx="50" cy="65" rx="20" ry="2" fill="#6B7280" opacity="0.2" />
-        
-        {/* Fair spielendes Strichmännchen - deutlicher */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0' : 'transform translate-x-8'}`}>
-          {/* Körper */}
-          <circle cx="40" cy="35" r="8" stroke="#10B981" strokeWidth="2" fill="none" />
-          <line x1="40" y1="43" x2="40" y2="60" stroke="#10B981" strokeWidth="2" />
-          <line x1="40" y1="60" x2="30" y2="75" stroke="#10B981" strokeWidth="2" />
-          <line x1="40" y1="60" x2="50" y2="75" stroke="#10B981" strokeWidth="2" />
-          
-          {/* Controller in der Hand */}
-          {animationState < 3 ? (
-            <>
-              <line x1="40" y1="50" x2="30" y2="55" stroke="#10B981" strokeWidth="2" />
-              <line x1="40" y1="50" x2="50" y2="55" stroke="#10B981" strokeWidth="2" />
-            </>
-          ) : (
-            <>
-              <line x1="40" y1="50" x2="30" y2="55" stroke="#10B981" strokeWidth="2" />
-              <line x1="40" y1="50" x2="50" y2="50" stroke="#10B981" strokeWidth="2" />
-              {/* Standard-Controller */}
-              <rect x="50" y="47" width="8" height="6" rx="1" fill="#10B981" fillOpacity="0.3" stroke="#10B981" strokeWidth="0.5" />
-            </>
-          )}
-          
-          {/* Glückliches Fair-Play Gesicht */}
-          <circle cx="37" cy="33" r="1.5" fill="#10B981" />
-          <circle cx="43" cy="33" r="1.5" fill="#10B981" />
-          <path d="M37,38 Q40,41 43,38" stroke="#10B981" strokeWidth="1.5" fill="none" />
-          
-          {/* Fair-Play Symbol über dem Kopf */}
-          {animationState >= 3 && (
-            <g>
-              <circle cx="40" cy="20" r="5" fill="#10B981" fillOpacity="0.3" stroke="#10B981" strokeWidth="0.5" />
-              <path d="M37,20 L43,20 M40,17 L40,23" stroke="#10B981" strokeWidth="1" />
-            </g>
-          )}
-        </g>
-        
-        {/* Unfaires Spieler-Strichmännchen - deutlicher */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0' : 'transform -translate-x-8'}`}>
-          {/* Körper */}
-          <circle cx="70" cy="35" r="8" stroke="#6B7280" strokeWidth="2" fill="none" />
-          <line x1="70" y1="43" x2="70" y2="60" stroke="#6B7280" strokeWidth="2" />
-          <line x1="70" y1="60" x2="60" y2="75" stroke="#6B7280" strokeWidth="2" />
-          <line x1="70" y1="60" x2="80" y2="75" stroke="#6B7280" strokeWidth="2" />
-          
-          {/* Cheating-Tool in der Hand - deutlicher */}
-          {animationState < 3 ? (
-            <>
-              <line x1="70" y1="50" x2="80" y2="55" stroke="#6B7280" strokeWidth="2" />
-              <line x1="70" y1="50" x2="60" y2="55" stroke="#6B7280" strokeWidth="2" />
-            </>
-          ) : (
-            <>
-              <line x1="70" y1="50" x2="80" y2="55" stroke="#6B7280" strokeWidth="2" />
-              <line x1="70" y1="50" x2="60" y2="50" stroke="#6B7280" strokeWidth="2" />
-              {/* Modifizierter/Gehackter Controller */}
-              <rect x="52" y="47" width="8" height="6" rx="1" fill="#EF4444" fillOpacity="0.3" stroke="#EF4444" strokeWidth="0.5" />
-              {/* Code/Hack symbolisieren */}
-              <text x="56" y="52" fontSize="4" textAnchor="middle" fill="#EF4444" fontWeight="bold">
-                &lt;/&gt;
-              </text>
-            </>
-          )}
-          
-          {/* Gesichtsausdruck - wird schuldbewusst */}
-          {animationState >= 3 ? (
-            <>
-              <circle cx="67" cy="33" r="1.5" fill="#6B7280" />
-              <circle cx="73" cy="33" r="1.5" fill="#6B7280" />
-              <path d="M67,38 Q70,36 73,38" stroke="#6B7280" strokeWidth="1.5" fill="none" />
-            </>
-          ) : (
-            <>
-              <circle cx="67" cy="33" r="1.5" fill="#6B7280" />
-              <circle cx="73" cy="33" r="1.5" fill="#6B7280" />
-              <path d="M67,38 Q70,40 73,38" stroke="#6B7280" strokeWidth="1.5" fill="none" />
-            </>
-          )}
-          
-          {/* Unfair-Play Symbol */}
-          {animationState >= 3 && (
-            <g>
-              <circle cx="70" cy="20" r="5" fill="#EF4444" fillOpacity="0.3" stroke="#EF4444" strokeWidth="0.5" />
-              <path d="M67,20 L73,20" stroke="#EF4444" strokeWidth="1" />
-            </g>
-          )}
-        </g>
-        
-        {/* Verbotszeichen auf Cheating - verbessert */}
-        {animationState >= 3 && (
-          <g className="animate-pulse" style={{animationDuration: "2s"}}>
-            <circle cx="56" cy="50" r="8" stroke="#EF4444" strokeWidth="2" fill="none" />
-            <line x1="51" y1="55" x2="61" y2="45" stroke="#EF4444" strokeWidth="2" />
+        {/* Spielfeld/Arena */}
+        {animationState >= 1 && (
+          <g>
+            {/* Spielfeld */}
+            <rect 
+              x="25" 
+              y="60" 
+              width="50" 
+              height="30" 
+              rx="2" 
+              fill="#10B981" 
+              fillOpacity="0.1" 
+              stroke="#10B981" 
+              strokeWidth="1" 
+              strokeDasharray={animationState < 2 ? "2,2" : "0"}
+              className="transition-all duration-500"
+            />
+            
+            {/* Mittellinie */}
+            <line 
+              x1="50" 
+              y1="60" 
+              x2="50" 
+              y2="90" 
+              stroke="#10B981" 
+              strokeWidth="1" 
+              strokeDasharray="2,2"
+            />
+            
+            {/* Spielfeldmarkierungen werden bei höheren Animationsstufen detaillierter */}
+            {animationState >= 2 && (
+              <g>
+                <circle 
+                  cx="50" 
+                  cy="75" 
+                  r="5" 
+                  fill="none" 
+                  stroke="#10B981" 
+                  strokeWidth="0.5" 
+                  strokeDasharray="1,1"
+                />
+                <rect 
+                  x="25" 
+                  y="70" 
+                  width="8" 
+                  height="10" 
+                  fill="none" 
+                  stroke="#10B981" 
+                  strokeWidth="0.5" 
+                  strokeDasharray="1,1"
+                />
+                <rect 
+                  x="67" 
+                  y="70" 
+                  width="8" 
+                  height="10" 
+                  fill="none" 
+                  stroke="#10B981" 
+                  strokeWidth="0.5" 
+                  strokeDasharray="1,1"
+                />
+              </g>
+            )}
           </g>
         )}
         
-        {/* Fair-Play Symbol - verbesserte Trophäe */}
-        {animationState === 4 && (
-          <g className="animate-pulse" style={{animationDuration: "1.5s"}}>
-            {/* Trophäe */}
-            <path d="M40,15 L35,15 Q32,15 32,18 L32,21 Q32,24 35,24 L37,24 L37,26 L33,28 L47,28 L43,26 L43,24 L45,24 Q48,24 48,21 L48,18 Q48,15 45,15 L40,15" 
-              fill="#FBBF24" fillOpacity="0.7" stroke="#FBBF24" strokeWidth="0.5" />
-            
-            {/* Trophäenschale */}
-            <ellipse cx="40" cy="15" rx="5" ry="1.5" fill="#FBBF24" fillOpacity="0.9" />
-            
-            {/* Fairplay-Text */}
-            <text x="40" y="21" fontSize="4" textAnchor="middle" fill="#10B981" fontWeight="bold">
-              FAIR
-            </text>
-          </g>
+        {/* Spieler 1 - Fair Player */}
+        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0 translate-y-0' : 'transform translate-x-5 translate-y-5'}`}>
+          <circle cx="35" cy="35" r="7" stroke="#10B981" strokeWidth="2" fill="none" />
+          <line x1="35" y1="42" x2="35" y2="55" stroke="#10B981" strokeWidth="2" />
+          <line x1="35" y1="55" x2="30" y2="65" stroke="#10B981" strokeWidth="2" />
+          <line x1="35" y1="55" x2="40" y2="65" stroke="#10B981" strokeWidth="2" />
+          
+          {/* Arme - unterschiedliche Posen je nach Animation */}
+          {animationState < 3 ? (
+            <>
+              <line x1="35" y1="45" x2="28" y2="50" stroke="#10B981" strokeWidth="2" />
+              <line x1="35" y1="45" x2="42" y2="50" stroke="#10B981" strokeWidth="2" />
+            </>
+          ) : (
+            <>
+              <line x1="35" y1="45" x2="28" y2="52" stroke="#10B981" strokeWidth="2" />
+              <line x1="35" y1="45" x2="42" y2="45" stroke="#10B981" strokeWidth="2" />
+            </>
+          )}
+          
+          {/* Gesicht */}
+          <circle cx="33" cy="33" r="1" fill="#10B981" />
+          <circle cx="37" cy="33" r="1" fill="#10B981" />
+          <path 
+            d={animationState >= 3 ? "M33,36 Q35,38 37,36" : "M33,36 Q35,37 37,36"} 
+            stroke="#10B981" 
+            strokeWidth="1" 
+            fill="none"
+            className="transition-all duration-300"
+          />
+        </g>
+        
+        {/* Spieler 2 */}
+        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0 translate-y-0' : 'transform -translate-x-5 translate-y-5'}`}>
+          <circle cx="65" cy="35" r="7" stroke="#3B82F6" strokeWidth="2" fill="none" />
+          <line x1="65" y1="42" x2="65" y2="55" stroke="#3B82F6" strokeWidth="2" />
+          <line x1="65" y1="55" x2="60" y2="65" stroke="#3B82F6" strokeWidth="2" />
+          <line x1="65" y1="55" x2="70" y2="65" stroke="#3B82F6" strokeWidth="2" />
+          
+          {/* Arme - unterschiedliche Posen */}
+          {animationState < 3 ? (
+            <>
+              <line x1="65" y1="45" x2="58" y2="50" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="65" y1="45" x2="72" y2="50" stroke="#3B82F6" strokeWidth="2" />
+            </>
+          ) : (
+            <>
+              <line x1="65" y1="45" x2="59" y2="45" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="65" y1="45" x2="72" y2="52" stroke="#3B82F6" strokeWidth="2" />
+            </>
+          )}
+          
+          {/* Gesicht */}
+          <circle cx="63" cy="33" r="1" fill="#3B82F6" />
+          <circle cx="67" cy="33" r="1" fill="#3B82F6" />
+          <path 
+            d={animationState >= 3 ? "M63,36 Q65,38 67,36" : "M63,36 Q65,37 67,36"} 
+            stroke="#3B82F6" 
+            strokeWidth="1" 
+            fill="none"
+            className="transition-all duration-300"
+          />
+        </g>
+        
+        {/* Ball/Spielobjekt */}
+        {animationState >= 2 && (
+          <circle 
+            cx="50" 
+            cy="50" 
+            r="3" 
+            fill="#FFFFFF" 
+            stroke="#64748B" 
+            strokeWidth="0.5" 
+            className={animationState >= 3 ? "animate-bounce" : ""}
+            style={{animationDuration: "1s"}}
+          />
         )}
         
-        {/* Spielwiese Elemente - zusätzlicher Kontext */}
+        {/* Fair Play Handshake/Symbol */}
         {animationState >= 3 && (
           <g>
-            <circle cx="40" cy="80" r="2" fill="#10B981" fillOpacity="0.3" />
-            <circle cx="60" cy="80" r="2" fill="#EF4444" fillOpacity="0.3" />
-            <text x="40" y="85" fontSize="3" textAnchor="middle" fill="#10B981">
-              GG!
-            </text>
-            <text x="60" y="85" fontSize="3" textAnchor="middle" fill="#EF4444" className={animationState === 4 ? "opacity-50" : ""}>
-              Cheater!
-            </text>
+            <g className={animationState >= 4 ? "opacity-100" : "opacity-0"} style={{transition: "opacity 0.5s"}}>
+              <line 
+                x1="42" 
+                y1="45" 
+                x2="58" 
+                y2="45" 
+                stroke="#FFFFFF" 
+                strokeWidth="1.5" 
+                strokeDasharray="0" 
+                className="animate-pulse"
+              />
+              <circle 
+                cx="50" 
+                cy="45" 
+                r="3" 
+                fill="#FFFFFF" 
+                fillOpacity="0.3" 
+                className="animate-ping"
+                style={{animationDuration: "1.5s"}}
+              />
+            </g>
+            
+            {/* Fair Play Pokal/Symbol */}
+            {animationState >= 4 && (
+              <g className="animate-pulse" style={{animationDuration: "2s"}}>
+                <path 
+                  d="M45,15 L55,15 L53,17 L52,25 L48,25 L47,17 Z" 
+                  fill="#FFD700" 
+                  fillOpacity="0.5" 
+                  stroke="#10B981" 
+                  strokeWidth="0.5"
+                />
+                <rect 
+                  x="48" 
+                  y="25" 
+                  width="4" 
+                  height="3" 
+                  fill="#FFD700" 
+                  fillOpacity="0.5" 
+                  stroke="#10B981" 
+                  strokeWidth="0.5"
+                />
+                <rect 
+                  x="46" 
+                  y="28" 
+                  width="8" 
+                  height="1" 
+                  fill="#FFD700" 
+                  fillOpacity="0.5" 
+                  stroke="#10B981" 
+                  strokeWidth="0.5"
+                />
+                
+                {/* Fair Play-Text */}
+                <text x="50" y="20" fontSize="3" textAnchor="middle" fill="#10B981" fontWeight="bold">
+                  FAIR PLAY
+                </text>
+              </g>
+            )}
           </g>
         )}
       </svg>
@@ -691,7 +850,15 @@ const CommunityRulesSection = ({ isVisible }) => {
                       ? 'bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-900/30 dark:to-primary-800/30 border-l-4 border-primary-500 dark:border-primary-400 shadow-lg' 
                       : 'bg-light-bg-tertiary dark:bg-dark-bg-tertiary hover:bg-primary-50 dark:hover:bg-primary-900/50'
                   }`}
-                  onClick={() => handleRuleClick(index)}
+                  onClick={() => {
+                    setActiveRule(index);
+                    // Beim Regelwechsel Animation neu starten
+                    setAnimationState(0);
+                    setTimeout(() => {
+                      setAnimationState(1);
+                      setIsAnimating(true);
+                    }, 100);
+                  }}
                   style={{ transitionDelay: `${index * 100}ms` }}
                 >
                   <div className="flex items-start">
@@ -732,19 +899,19 @@ const CommunityRulesSection = ({ isVisible }) => {
                   </p>
                 </div>
                 
-                {/* Die Animationspunkte nur anzeigen, wenn man mit der Maus darauf ist und nicht automatisch durchläuft */}
-                {!animationTimerActive && (
+                {/* Animation-Steuerung - nur anzeigen wenn Animation aktiv läuft */}
+                {isAnimating && (
                   <div className="flex justify-center mt-6">
                     <div className="flex space-x-2">
                       {[1, 2, 3, 4].map((dot) => (
                         <button
                           key={dot}
-                          className={`h-2 transition-all ${
+                          onClick={() => setAnimationState(dot)}
+                          className={`h-2 transition-all duration-300 rounded-full ${
                             animationState === dot 
                               ? 'w-8 bg-primary-600 dark:bg-primary-500' 
                               : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-primary-400 dark:hover:bg-primary-700'
-                          } rounded-full`}
-                          onClick={() => setAnimationState(dot)}
+                          }`}
                           aria-label={`Animation Phase ${dot}`}
                         />
                       ))}
