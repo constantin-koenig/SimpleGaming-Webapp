@@ -21,7 +21,7 @@ const CommunityRulesSection = ({ isVisible }) => {
   useEffect(() => {
     if (!isVisible || !isAnimating) return;
     
-    const maxFrames = 4;
+    const maxFrames = 5; // Erhöht auf 5 Frames für flüssigere Animation
     const interval = setInterval(() => {
       setAnimationState(prev => {
         const next = (prev % maxFrames) + 1;
@@ -33,7 +33,7 @@ const CommunityRulesSection = ({ isVisible }) => {
         }
         return next;
       });
-    }, 1500);
+    }, 1200); // Etwas langsamer für bessere Wahrnehmung
     
     return () => clearInterval(interval);
   }, [isVisible, isAnimating, activeRule]);
@@ -359,7 +359,7 @@ const CommunityRulesSection = ({ isVisible }) => {
     </div>
   );
   
-  // NEUE Animation für Hilfsbereitschaft
+  // NEUE Animation für Hilfsbereitschaft mit Tür
   const renderHelpfulnessAnimation = () => (
     <div className="h-48 w-48 mx-auto relative">
       <svg viewBox="0 0 100 100" className="w-full h-full filter drop-shadow-lg">
@@ -372,204 +372,382 @@ const CommunityRulesSection = ({ isVisible }) => {
         </defs>
         <circle cx="50" cy="50" r="40" fill="url(#helpGlow)" className={animationState >= 3 ? "animate-pulse" : ""} />
         
-        {/* Tutorialumgebung - erscheint allmählich */}
-        {animationState >= 1 && (
-          <g className="transition-all duration-500">
-            {/* Bücher/Ressourcen unten */}
-            <rect 
-              x="35" 
-              y="75" 
-              width="30" 
-              height="8" 
-              rx="2" 
-              fill="#EAB308" 
-              fillOpacity="0.2" 
-              stroke="#EAB308" 
-              strokeWidth="1" 
-            />
-            {/* Bücherstapel */}
-            <g className={`transition-all duration-300 ${animationState >= 2 ? 'opacity-100' : 'opacity-30'}`}>
-              <rect x="68" y="65" width="15" height="4" rx="1" fill="#3B82F6" fillOpacity="0.3" stroke="#3B82F6" strokeWidth="0.5" />
-              <rect x="70" y="61" width="15" height="4" rx="1" fill="#EF4444" fillOpacity="0.3" stroke="#EF4444" strokeWidth="0.5" />
-              <rect x="72" y="57" width="15" height="4" rx="1" fill="#10B981" fillOpacity="0.3" stroke="#10B981" strokeWidth="0.5" />
-            </g>
-          </g>
-        )}
+        {/* Tür-Rahmen (immer sichtbar) */}
+        <rect 
+          x="30" 
+          y="20" 
+          width="40" 
+          height="60" 
+          rx="2" 
+          fill="none" 
+          stroke="#EAB308" 
+          strokeWidth="2" 
+        />
         
-        {/* Erfahrener Mentor */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0' : 'transform translate-x-8'}`}>
-          <circle cx="30" cy="40" r="8" stroke="#EAB308" strokeWidth="2" fill="none" />
-          <line x1="30" y1="48" x2="30" y2="65" stroke="#EAB308" strokeWidth="2" />
-          <line x1="30" y1="65" x2="22" y2="80" stroke="#EAB308" strokeWidth="2" />
-          <line x1="30" y1="65" x2="38" y2="80" stroke="#EAB308" strokeWidth="2" />
-          
-          {/* Arme - unterschiedliche Positionen je nach Animationsstatus */}
-          {animationState < 3 ? (
+        {/* Tür (öffnet sich basierend auf Animation) - Perspektivische Darstellung */}
+        <g className="transition-all duration-700">
+          {/* Geschlossene Tür (Phase 1) */}
+          {animationState < 2 && (
             <>
-              <line x1="30" y1="53" x2="20" y2="60" stroke="#EAB308" strokeWidth="2" />
-              <line x1="30" y1="53" x2="40" y2="55" stroke="#EAB308" strokeWidth="2" />
-            </>
-          ) : (
-            <>
-              <line x1="30" y1="53" x2="20" y2="60" stroke="#EAB308" strokeWidth="2" />
-              <line x1="30" y1="53" x2="45" y2="45" stroke="#EAB308" strokeWidth="2" />
-            </>
-          )}
-          
-          {/* Gesicht */}
-          <circle cx="27" cy="38" r="1.5" fill="#EAB308" />
-          <circle cx="33" cy="38" r="1.5" fill="#EAB308" />
-          <path 
-            d={animationState >= 3 ? "M27,42 Q30,45 33,42" : "M27,41 Q30,43 33,41"} 
-            stroke="#EAB308" 
-            strokeWidth="1.5" 
-            fill="none" 
-            className="transition-all duration-300"
-          />
-          
-          {/* Mentoren-Hut/Abzeichen erscheint bei höheren Animationsstatus */}
-          {animationState >= 3 && (
-            <path 
-              d="M22,33 L30,28 L38,33 L35,35 L30,32 L25,35 Z" 
-              fill="#EAB308" 
-              fillOpacity="0.3" 
-              stroke="#EAB308" 
-              strokeWidth="1"
-            />
-          )}
-        </g>
-        
-        {/* Lernender Schüler */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0' : 'transform -translate-x-8'}`}>
-          <circle cx="70" cy="40" r="7" stroke="#3B82F6" strokeWidth="2" fill="none" />
-          <line x1="70" y1="47" x2="70" y2="62" stroke="#3B82F6" strokeWidth="2" />
-          <line x1="70" y1="62" x2="64" y2="75" stroke="#3B82F6" strokeWidth="2" />
-          <line x1="70" y1="62" x2="76" y2="75" stroke="#3B82F6" strokeWidth="2" />
-          
-          {/* Arme - unterschiedliche Positionen */}
-          {animationState < 3 ? (
-            <>
-              <line x1="70" y1="52" x2="63" y2="58" stroke="#3B82F6" strokeWidth="2" />
-              <line x1="70" y1="52" x2="77" y2="58" stroke="#3B82F6" strokeWidth="2" />
-            </>
-          ) : (
-            <>
-              <line x1="70" y1="52" x2="59" y2="48" stroke="#3B82F6" strokeWidth="2" />
-              <line x1="70" y1="52" x2="77" y2="58" stroke="#3B82F6" strokeWidth="2" />
-            </>
-          )}
-          
-          {/* Gesicht - wird fröhlicher */}
-          <circle cx="67" cy="38" r="1.5" fill="#3B82F6" />
-          <circle cx="73" cy="38" r="1.5" fill="#3B82F6" />
-          <path 
-            d={animationState >= 3 ? "M67,42 Q70,45 73,42" : "M67,41 Q70,42 73,41"} 
-            stroke="#3B82F6" 
-            strokeWidth="1.5" 
-            fill="none"
-            className="transition-all duration-300"
-          />
-          
-          {/* Fragezeichen verwandelt sich in Glühbirne */}
-          {animationState >= 2 && (
-            <g className="transition-all duration-500">
-              {animationState < 4 ? (
-                <g>
-                  <circle 
-                    cx="70" 
-                    cy="25" 
-                    r="4" 
-                    fill="#3B82F6" 
-                    fillOpacity="0.2" 
-                    stroke="#3B82F6" 
-                    strokeWidth="0.5"
-                  />
-                  <text x="70" y="27" fontSize="6" textAnchor="middle" fill="#3B82F6" fontWeight="bold">?</text>
-                </g>
-              ) : (
-                <g className="animate-pulse">
-                  <circle 
-                    cx="70" 
-                    cy="25" 
-                    r="4" 
-                    fill="#EAB308" 
-                    fillOpacity="0.3" 
-                    stroke="#EAB308" 
-                    strokeWidth="0.5"
-                  />
-                  <path 
-                    d="M70,23 C69,21 71,21 70,23 M70,24 L70,26 M68.5,22 L67.5,21 M71.5,22 L72.5,21" 
-                    stroke="#EAB308" 
-                    strokeWidth="0.8" 
-                    fill="none" 
-                  />
-                </g>
-              )}
-            </g>
-          )}
-        </g>
-        
-        {/* Wissen/Material wird geteilt */}
-        {animationState >= 3 && (
-          <g className="transition-all duration-500">
-            {/* Wissenstransfer durch visuellen Pfad */}
-            <path 
-              d="M40,45 Q50,35 60,45" 
-              stroke="#EAB308" 
-              strokeWidth="1.5" 
-              strokeDasharray="2,2" 
-              fill="none"
-              className="animate-pulse"
-            />
-            
-            {/* Buchsymbol/Dokument */}
-            <g className={`transition-transform duration-300 ${animationState >= 4 ? 'transform translate-y-0 opacity-100' : 'transform translate-y-5 opacity-40'}`}>
               <rect 
-                x="45" 
-                y="52" 
-                width="10" 
-                height="12" 
+                x="35" 
+                y="25" 
+                width="30" 
+                height="50" 
                 rx="1" 
-                fill="#FFFFFF" 
-                fillOpacity="0.6" 
+                fill="#EAB308" 
+                fillOpacity="0.1" 
                 stroke="#EAB308" 
-                strokeWidth="0.5"
+                strokeWidth="1.5"
               />
-              <line x1="47" y1="55" x2="53" y2="55" stroke="#EAB308" strokeWidth="0.5" />
-              <line x1="47" y1="58" x2="53" y2="58" stroke="#EAB308" strokeWidth="0.5" />
-              <line x1="47" y1="61" x2="50" y2="61" stroke="#EAB308" strokeWidth="0.5" />
+              <circle 
+                cx="40" 
+                cy="50" 
+                r="2" 
+                fill="#EAB308" 
+              />
+            </>
+          )}
+          
+          {/* Leicht geöffnete Tür (Phase 2) */}
+          {animationState === 2 && (
+            <>
+              {/* Perspektivisch leicht geöffnete Tür mit gerader linker Kante */}
+              <path 
+                d="M65,25 L42,23 L42,73 L65,75 Z" 
+                fill="#EAB308" 
+                fillOpacity="0.1" 
+                stroke="#EAB308" 
+                strokeWidth="1.5"
+              />
+              <circle 
+                cx="45" 
+                cy="50" 
+                r="2" 
+                fill="#EAB308" 
+              />
+              
+              {/* Linke gerade Kante */}
+              <line 
+                x1="42" 
+                y1="23" 
+                x2="42" 
+                y2="73" 
+                stroke="#EAB308" 
+                strokeWidth="1" 
+              />
+              
+              {/* Obere und untere Kanten mit gleicher Länge */}
+              <line 
+                x1="42" 
+                y1="23" 
+                x2="65" 
+                y2="25" 
+                stroke="#EAB308" 
+                strokeWidth="1" 
+              />
+              <line 
+                x1="42" 
+                y1="73" 
+                x2="65" 
+                y2="75" 
+                stroke="#EAB308" 
+                strokeWidth="1" 
+              />
+            </>
+          )}
+          
+          {/* Weiter geöffnete Tür (Phase 3-4) */}
+          {animationState >= 3 && (
+            <>
+              {/* Stärker perspektivisch geöffnete Tür - mit gerader linker Kante */}
+              <path 
+                d="M65,25 L45,20 L45,70 L65,75 Z" 
+                fill="#EAB308" 
+                fillOpacity="0.1" 
+                stroke="#EAB308" 
+                strokeWidth="1.5"
+              />
+              <circle 
+                cx="50" 
+                cy="50" 
+                r="2" 
+                fill="#EAB308" 
+              />
+              
+              {/* Gerade linke Kante */}
+              <line 
+                x1="45" 
+                y1="20" 
+                x2="45" 
+                y2="70" 
+                stroke="#EAB308" 
+                strokeWidth="1.5" 
+              />
+              
+              {/* Obere und untere Kanten mit gleicher Länge */}
+              <line 
+                x1="45" 
+                y1="20" 
+                x2="65" 
+                y2="25" 
+                stroke="#EAB308" 
+                strokeWidth="1" 
+              />
+              <line 
+                x1="45" 
+                y1="70" 
+                x2="65" 
+                y2="75" 
+                stroke="#EAB308" 
+                strokeWidth="1" 
+              />
+            </>
+          )}
+        </g>
+        
+        {/* Person 1 - die Tür öffnet */}
+        <g className={`transition-all duration-500`}>
+          {/* Phase 1 - steht vor der Tür */}
+          {animationState === 1 && (
+            <>
+              {/* Kopf */}
+              <circle cx="25" cy="45" r="6" stroke="#EC4899" strokeWidth="2" fill="none" />
+              
+              {/* Körper */}
+              <line x1="25" y1="51" x2="25" y2="65" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Beine */}
+              <line x1="25" y1="65" x2="20" y2="80" stroke="#EC4899" strokeWidth="2" />
+              <line x1="25" y1="65" x2="30" y2="80" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Arme - normale Position */}
+              <line x1="25" y1="55" x2="18" y2="60" stroke="#EC4899" strokeWidth="2" />
+              <line x1="25" y1="55" x2="32" y2="60" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Gesicht - nach vorne schauend */}
+              <circle cx="23" cy="43" r="1" fill="#EC4899" />
+              <circle cx="27" cy="43" r="1" fill="#EC4899" />
+              <path d="M22,46 Q25,47 28,46" stroke="#EC4899" strokeWidth="1" fill="none" />
+            </>
+          )}
+          
+          {/* Phase 2 - bemerkt die andere Person und beginnt, die Hand zur Tür zu bewegen */}
+          {animationState === 2 && (
+            <>
+              {/* Kopf */}
+              <circle cx="28" cy="45" r="6" stroke="#EC4899" strokeWidth="2" fill="none" />
+              
+              {/* Körper - leicht zur Tür bewegt */}
+              <line x1="28" y1="51" x2="28" y2="65" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Beine - leichte Schrittposition */}
+              <line x1="28" y1="65" x2="22" y2="80" stroke="#EC4899" strokeWidth="2" />
+              <line x1="28" y1="65" x2="33" y2="78" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Arme - ein Arm beginnt sich zur Tür zu bewegen */}
+              <line x1="28" y1="55" x2="21" y2="60" stroke="#EC4899" strokeWidth="2" />
+              <line x1="28" y1="55" x2="38" y2="50" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Gesicht - schaut zur anderen Person */}
+              <circle cx="26" cy="43" r="1" fill="#EC4899" />
+              <circle cx="30" cy="43" r="1" fill="#EC4899" />
+              <path d="M25,46 Q28,47 31,46" stroke="#EC4899" strokeWidth="1" fill="none" />
+            </>
+          )}
+          
+          {/* Phase 3 - hält die Tür auf, näher an der Tür */}
+          {animationState === 3 && (
+            <>
+              {/* Kopf - noch näher an der Tür */}
+              <circle cx="34" cy="45" r="6" stroke="#EC4899" strokeWidth="2" fill="none" />
+              
+              {/* Körper - direkt an der Tür */}
+              <line x1="34" y1="51" x2="34" y2="65" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Beine - stabile Position */}
+              <line x1="34" y1="65" x2="28" y2="80" stroke="#EC4899" strokeWidth="2" />
+              <line x1="34" y1="65" x2="39" y2="80" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Arme - ein Arm hält die Tür */}
+              <line x1="34" y1="55" x2="28" y2="62" stroke="#EC4899" strokeWidth="2" />
+              <line 
+                x1="34" 
+                y1="55" 
+                x2="44" 
+                y2="47" 
+                stroke="#EC4899" 
+                strokeWidth="2"
+              />
+              
+              {/* Gesicht - schaut zur Tür/anderen Person */}
+              <circle cx="32" cy="43" r="1" fill="#EC4899" />
+              <circle cx="36" cy="43" r="1" fill="#EC4899" />
+              <path d="M31,47 Q34,48 37,47" stroke="#EC4899" strokeWidth="1" fill="none" />
+            </>
+          )}
+          
+          {/* Phase 4 - hält Tür weiter, während blau durchgeht */}
+          {animationState === 4 && (
+            <>
+              {/* Kopf - leicht zur Tür geneigt */}
+              <circle cx="32" cy="45" r="6" stroke="#EC4899" strokeWidth="2" fill="none" />
+              
+              {/* Körper - leicht zurückgewichen */}
+              <line x1="32" y1="51" x2="32" y2="65" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Beine - in Position zum Durchgehen */}
+              <line x1="32" y1="65" x2="26" y2="78" stroke="#EC4899" strokeWidth="2" />
+              <line x1="32" y1="65" x2="36" y2="80" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Arme - hält weiter die Tür */}
+              <line x1="32" y1="55" x2="25" y2="58" stroke="#EC4899" strokeWidth="2" />
+              <line 
+                x1="32" 
+                y1="55" 
+                x2="43" 
+                y2="45" 
+                stroke="#EC4899" 
+                strokeWidth="2"
+              />
+              
+              {/* Gesicht - schaut der blauen Person nach */}
+              <circle cx="31" cy="43" r="1" fill="#EC4899" />
+              <circle cx="35" cy="43" r="1" fill="#EC4899" />
+              <path d="M30,47 Q32,49 35,47" stroke="#EC4899" strokeWidth="1" fill="none" />
+            </>
+          )}
+          
+          {/* Phase 5 - läuft selbst durch die Tür (mit Übergang) */}
+          {animationState === 5 && (
+            <g className="transition-opacity duration-700" style={{ opacity: 0.4 }}>
+              {/* Kopf - teilweise durch die Tür */}
+              <circle cx="40" cy="45" r="6" stroke="#EC4899" strokeWidth="2" fill="none" />
+              
+              {/* Körper - in Bewegung durch die Tür */}
+              <line x1="40" y1="51" x2="40" y2="65" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Beine - aktive Schrittposition */}
+              <line x1="40" y1="65" x2="35" y2="75" stroke="#EC4899" strokeWidth="2" />
+              <line x1="40" y1="65" x2="45" y2="72" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Arme - in Bewegung */}
+              <line x1="40" y1="55" x2="35" y2="62" stroke="#EC4899" strokeWidth="2" />
+              <line x1="40" y1="55" x2="45" y2="60" stroke="#EC4899" strokeWidth="2" />
+              
+              {/* Gesicht - lächelnd */}
+              <circle cx="38" cy="43" r="1" fill="#EC4899" />
+              <circle cx="42" cy="43" r="1" fill="#EC4899" />
+              <path d="M37,47 Q40,49 43,47" stroke="#EC4899" strokeWidth="1" fill="none" />
             </g>
-            
-            {/* Erfolgseffekt in Phase 4 */}
-            {animationState >= 4 && (
-              <g>
-                <path 
-                  d="M50,25 L52,30 L57,30 L53,33 L55,38 L50,35 L45,38 L47,33 L43,30 L48,30 Z" 
-                  fill="#EAB308" 
-                  fillOpacity="0.3" 
-                  className="animate-ping"
-                  style={{animationDuration: "3s"}}
-                />
-                <circle 
-                  cx="50" 
-                  cy="40" 
-                  r="25" 
-                  stroke="#EAB308" 
-                  strokeWidth="1" 
-                  strokeDasharray="3,3" 
-                  fill="none" 
-                  className="animate-pulse"
-                  style={{animationDuration: "3s"}}
-                />
-              </g>
-            )}
+          )}
+        </g>
+        
+        {/* Person 2 - tritt durch die Tür */}
+        <g className={`transition-all duration-700`}>
+          {/* Phase 1 - noch nicht sichtbar */}
+          {animationState === 1 && (
+            <g className="opacity-0"></g>
+          )}
+          
+          {/* Phase 2 - nähert sich der Tür */}
+          {animationState === 2 && (
+            <>
+              {/* Kopf */}
+              <circle cx="65" cy="45" r="6" stroke="#3B82F6" strokeWidth="2" fill="none" />
+              
+              {/* Körper */}
+              <line x1="65" y1="51" x2="65" y2="65" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Beine in leichter Schrittposition */}
+              <line x1="65" y1="65" x2="60" y2="78" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="65" y1="65" x2="70" y2="78" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Arme - normal */}
+              <line x1="65" y1="55" x2="59" y2="60" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="65" y1="55" x2="71" y2="60" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Gesicht - neutral */}
+              <circle cx="63" cy="43" r="1" fill="#3B82F6" />
+              <circle cx="67" cy="43" r="1" fill="#3B82F6" />
+              <path d="M62,46 Q65,47 68,46" stroke="#3B82F6" strokeWidth="1" fill="none" />
+            </>
+          )}
+          
+          {/* Phase 3 - steht vor der Tür */}
+          {animationState === 3 && (
+            <>
+              {/* Kopf */}
+              <circle cx="58" cy="45" r="6" stroke="#3B82F6" strokeWidth="2" fill="none" />
+              
+              {/* Körper */}
+              <line x1="58" y1="51" x2="58" y2="65" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Beine - bereit durchzugehen */}
+              <line x1="58" y1="65" x2="54" y2="78" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="58" y1="65" x2="63" y2="76" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Arme - in Bewegung */}
+              <line x1="58" y1="55" x2="52" y2="58" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="58" y1="55" x2="64" y2="58" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Gesicht - freundlicher */}
+              <circle cx="56" cy="43" r="1" fill="#3B82F6" />
+              <circle cx="60" cy="43" r="1" fill="#3B82F6" />
+              <path d="M55,47 Q58,48 61,47" stroke="#3B82F6" strokeWidth="1" fill="none" />
+            </>
+          )}
+          
+          {/* Phase 4 - geht durch die Tür mit allmählichem Verschwinden */}
+          {animationState === 4 && (
+            <g className="transition-opacity duration-700" style={{ opacity: 0.5 }}>
+              {/* Kopf - bereits durch die Tür, weiter links */}
+              <circle cx="38" cy="35" r="6" stroke="#3B82F6" strokeWidth="2" fill="none" />
+              
+              {/* Körper - weiter durch die Tür */}
+              <line x1="38" y1="41" x2="38" y2="55" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Beine - deutliche Schrittposition weiter vorn */}
+              <line x1="38" y1="55" x2="32" y2="66" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="38" y1="55" x2="44" y2="62" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Arme - aktive Gehbewegung */}
+              <line x1="38" y1="45" x2="33" y2="52" stroke="#3B82F6" strokeWidth="2" />
+              <line x1="38" y1="45" x2="43" y2="50" stroke="#3B82F6" strokeWidth="2" />
+              
+              {/* Gesicht - lächelnd, dankbar */}
+              <circle cx="36" cy="33" r="1" fill="#3B82F6" />
+              <circle cx="40" cy="33" r="1" fill="#3B82F6" />
+              <path d="M35,37 Q38,39 41,37" stroke="#3B82F6" strokeWidth="1" fill="none" />
+            </g>
+          )}
+          
+          {/* Phase 5 - nicht mehr sichtbar, durch die Tür */}
+          {animationState === 5 && (
+            <g className="opacity-0"></g>
+          )}
+        </g>
+        
+        {/* Dankbarkeits-Symbol */}
+        {animationState >= 4 && (
+          <g>
+            {/* Leuchtende Dankbarkeits-Aura */}
+            <circle 
+              cx="50" 
+              cy="50" 
+              r="20" 
+              fill="#EAB308" 
+              fillOpacity="0.1" 
+              className="animate-ping" 
+              style={{animationDuration: "3s"}}
+            />
           </g>
         )}
       </svg>
     </div>
   );
   
-  // KOMPLETT NEUE Animation für Fairplay
+  // NEUE Animation für Fairplay mit Waage
   const renderFairplayAnimation = () => (
     <div className="h-48 w-48 mx-auto relative">
       <svg viewBox="0 0 100 100" className="w-full h-full filter drop-shadow-lg">
@@ -582,212 +760,112 @@ const CommunityRulesSection = ({ isVisible }) => {
         </defs>
         <circle cx="50" cy="50" r="40" fill="url(#fairplayGlow)" className={animationState >= 3 ? "animate-pulse" : ""} />
         
-        {/* Spielfeld/Arena */}
-        {animationState >= 1 && (
+        {/* Waage - Mittelständer */}
+        <rect x="48" y="35" width="4" height="45" rx="1" fill="#10B981" />
+        <circle cx="50" cy="35" r="3" fill="#10B981" />
+        
+        {/* Waagenfuß */}
+        <path d="M30,80 H70 L65,75 H35 Z" fill="#10B981" />
+        <rect x="45" y="75" width="10" height="5" fill="#10B981" />
+        
+        {/* Waagebalken - rotiert basierend auf Animationsstatus */}
+        <g 
+          className="transition-all duration-700 origin-center" 
+          transform={`rotate(${
+            animationState === 1 ? '0' : 
+            animationState === 2 ? '-15' : 
+            animationState === 3 ? '-5' : 
+            '0'
+          }, 50, 35)`}
+        >
+          <rect x="20" y="33" width="60" height="4" rx="2" fill="#10B981" />
+          
+          {/* Links-Ketten */}
+          <line x1="25" y1="37" x2="25" y2="45" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1" />
+          <line x1="25" y1="45" x2="25" y2="50" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1" 
+            className={animationState === 2 ? "origin-top transition-all duration-500 transform scale-y-90" : ""}
+          />
+          
+          {/* Rechts-Ketten */}
+          <line x1="75" y1="37" x2="75" y2="45" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1" />
+          <line x1="75" y1="45" x2="75" y2="50" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1"
+            className={animationState === 2 ? "origin-top transition-all duration-500 transform scale-y-110" : ""}
+          />
+          
+          {/* Linke Waagschale */}
+          <g className={animationState === 2 ? "transition-transform duration-500 transform translate-y-2" : 
+                        animationState >= 3 ? "transition-transform duration-500 transform translate-y-0" : 
+                        "transition-transform duration-500 transform translate-y-0"}>
+            <ellipse cx="25" cy="50" rx="8" ry="2" fill="#10B981" fillOpacity="0.7" />
+            <circle cx="25" cy="48" r="6" fill="#3B82F6" fillOpacity="0.5" stroke="#3B82F6" strokeWidth="0.5" />
+          </g>
+          
+          {/* Rechte Waagschale */}
+          <g className={animationState === 2 ? "transition-transform duration-500 transform -translate-y-2" : 
+                        animationState >= 3 ? "transition-transform duration-500 transform translate-y-0" : 
+                        "transition-transform duration-500 transform translate-y-0"}>
+            <ellipse cx="75" cy="50" rx="8" ry="2" fill="#10B981" fillOpacity="0.7" />
+            <circle cx="75" cy="48" r="6" fill="#EF4444" fillOpacity="0.5" stroke="#EF4444" strokeWidth="0.5" />
+          </g>
+        </g>
+        
+        {/* Phase 2: Ungleiche Gewichte */}
+        {animationState >= 2 && (
+          <>
+            {/* Kleinere/größere Kreise für ungleiche Gewichte */}
+            {animationState === 2 && (
+              <>
+                <circle cx="25" cy="48" r="4" fill="#3B82F6" fillOpacity="0.7" className="animate-pulse" />
+                <circle cx="75" cy="48" r="8" fill="#EF4444" fillOpacity="0.7" className="animate-pulse" />
+              </>
+            )}
+          </>
+        )}
+        
+        {/* Phase 3-4: Zusätzliche Gewichte für Gleichgewicht */}
+        {animationState >= 3 && (
+          <>
+            <circle cx="25" cy="48" r="6" fill="#3B82F6" fillOpacity="0.7" className="animate-pulse" />
+            <circle cx="75" cy="48" r="6" fill="#EF4444" fillOpacity="0.7" className="animate-pulse" />
+            
+            {/* Ausgleich-Symbol */}
+            <g className="animate-pulse" style={{animationDuration: "2s"}}>
+              <rect x="45" y="15" width="10" height="10" fill="#10B981" fillOpacity="0.3" />
+              <text x="50" y="22" fontSize="5" textAnchor="middle" fill="#10B981" fontWeight="bold">
+                =
+              </text>
+            </g>
+          </>
+        )}
+        
+        {/* Phase 4: Fair-Play-Symbol */}
+        {animationState >= 4 && (
           <g>
-            {/* Spielfeld */}
-            <rect 
-              x="25" 
-              y="60" 
-              width="50" 
-              height="30" 
-              rx="2" 
+            {/* Gerechtigkeits-Aura */}
+            <circle 
+              cx="50" 
+              cy="40" 
+              r="25" 
               fill="#10B981" 
               fillOpacity="0.1" 
               stroke="#10B981" 
-              strokeWidth="1" 
-              strokeDasharray={animationState < 2 ? "2,2" : "0"}
-              className="transition-all duration-500"
+              strokeWidth="0.5" 
+              strokeDasharray="2,2" 
+              className="animate-ping" 
+              style={{animationDuration: "3s"}}
             />
             
-            {/* Mittellinie */}
-            <line 
-              x1="50" 
-              y1="60" 
-              x2="50" 
-              y2="90" 
+            {/* Fair-Play-Emblem */}
+            <path 
+              d="M40,15 L60,15 L55,25 L45,25 Z" 
+              fill="#FFD700" 
+              fillOpacity="0.5" 
               stroke="#10B981" 
-              strokeWidth="1" 
-              strokeDasharray="2,2"
+              strokeWidth="0.5"
             />
-            
-            {/* Spielfeldmarkierungen werden bei höheren Animationsstufen detaillierter */}
-            {animationState >= 2 && (
-              <g>
-                <circle 
-                  cx="50" 
-                  cy="75" 
-                  r="5" 
-                  fill="none" 
-                  stroke="#10B981" 
-                  strokeWidth="0.5" 
-                  strokeDasharray="1,1"
-                />
-                <rect 
-                  x="25" 
-                  y="70" 
-                  width="8" 
-                  height="10" 
-                  fill="none" 
-                  stroke="#10B981" 
-                  strokeWidth="0.5" 
-                  strokeDasharray="1,1"
-                />
-                <rect 
-                  x="67" 
-                  y="70" 
-                  width="8" 
-                  height="10" 
-                  fill="none" 
-                  stroke="#10B981" 
-                  strokeWidth="0.5" 
-                  strokeDasharray="1,1"
-                />
-              </g>
-            )}
-          </g>
-        )}
-        
-        {/* Spieler 1 - Fair Player */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0 translate-y-0' : 'transform translate-x-5 translate-y-5'}`}>
-          <circle cx="35" cy="35" r="7" stroke="#10B981" strokeWidth="2" fill="none" />
-          <line x1="35" y1="42" x2="35" y2="55" stroke="#10B981" strokeWidth="2" />
-          <line x1="35" y1="55" x2="30" y2="65" stroke="#10B981" strokeWidth="2" />
-          <line x1="35" y1="55" x2="40" y2="65" stroke="#10B981" strokeWidth="2" />
-          
-          {/* Arme - unterschiedliche Posen je nach Animation */}
-          {animationState < 3 ? (
-            <>
-              <line x1="35" y1="45" x2="28" y2="50" stroke="#10B981" strokeWidth="2" />
-              <line x1="35" y1="45" x2="42" y2="50" stroke="#10B981" strokeWidth="2" />
-            </>
-          ) : (
-            <>
-              <line x1="35" y1="45" x2="28" y2="52" stroke="#10B981" strokeWidth="2" />
-              <line x1="35" y1="45" x2="42" y2="45" stroke="#10B981" strokeWidth="2" />
-            </>
-          )}
-          
-          {/* Gesicht */}
-          <circle cx="33" cy="33" r="1" fill="#10B981" />
-          <circle cx="37" cy="33" r="1" fill="#10B981" />
-          <path 
-            d={animationState >= 3 ? "M33,36 Q35,38 37,36" : "M33,36 Q35,37 37,36"} 
-            stroke="#10B981" 
-            strokeWidth="1" 
-            fill="none"
-            className="transition-all duration-300"
-          />
-        </g>
-        
-        {/* Spieler 2 */}
-        <g className={`transition-transform duration-500 ${animationState >= 2 ? 'transform translate-x-0 translate-y-0' : 'transform -translate-x-5 translate-y-5'}`}>
-          <circle cx="65" cy="35" r="7" stroke="#3B82F6" strokeWidth="2" fill="none" />
-          <line x1="65" y1="42" x2="65" y2="55" stroke="#3B82F6" strokeWidth="2" />
-          <line x1="65" y1="55" x2="60" y2="65" stroke="#3B82F6" strokeWidth="2" />
-          <line x1="65" y1="55" x2="70" y2="65" stroke="#3B82F6" strokeWidth="2" />
-          
-          {/* Arme - unterschiedliche Posen */}
-          {animationState < 3 ? (
-            <>
-              <line x1="65" y1="45" x2="58" y2="50" stroke="#3B82F6" strokeWidth="2" />
-              <line x1="65" y1="45" x2="72" y2="50" stroke="#3B82F6" strokeWidth="2" />
-            </>
-          ) : (
-            <>
-              <line x1="65" y1="45" x2="59" y2="45" stroke="#3B82F6" strokeWidth="2" />
-              <line x1="65" y1="45" x2="72" y2="52" stroke="#3B82F6" strokeWidth="2" />
-            </>
-          )}
-          
-          {/* Gesicht */}
-          <circle cx="63" cy="33" r="1" fill="#3B82F6" />
-          <circle cx="67" cy="33" r="1" fill="#3B82F6" />
-          <path 
-            d={animationState >= 3 ? "M63,36 Q65,38 67,36" : "M63,36 Q65,37 67,36"} 
-            stroke="#3B82F6" 
-            strokeWidth="1" 
-            fill="none"
-            className="transition-all duration-300"
-          />
-        </g>
-        
-        {/* Ball/Spielobjekt */}
-        {animationState >= 2 && (
-          <circle 
-            cx="50" 
-            cy="50" 
-            r="3" 
-            fill="#FFFFFF" 
-            stroke="#64748B" 
-            strokeWidth="0.5" 
-            className={animationState >= 3 ? "animate-bounce" : ""}
-            style={{animationDuration: "1s"}}
-          />
-        )}
-        
-        {/* Fair Play Handshake/Symbol */}
-        {animationState >= 3 && (
-          <g>
-            <g className={animationState >= 4 ? "opacity-100" : "opacity-0"} style={{transition: "opacity 0.5s"}}>
-              <line 
-                x1="42" 
-                y1="45" 
-                x2="58" 
-                y2="45" 
-                stroke="#FFFFFF" 
-                strokeWidth="1.5" 
-                strokeDasharray="0" 
-                className="animate-pulse"
-              />
-              <circle 
-                cx="50" 
-                cy="45" 
-                r="3" 
-                fill="#FFFFFF" 
-                fillOpacity="0.3" 
-                className="animate-ping"
-                style={{animationDuration: "1.5s"}}
-              />
-            </g>
-            
-            {/* Fair Play Pokal/Symbol */}
-            {animationState >= 4 && (
-              <g className="animate-pulse" style={{animationDuration: "2s"}}>
-                <path 
-                  d="M45,15 L55,15 L53,17 L52,25 L48,25 L47,17 Z" 
-                  fill="#FFD700" 
-                  fillOpacity="0.5" 
-                  stroke="#10B981" 
-                  strokeWidth="0.5"
-                />
-                <rect 
-                  x="48" 
-                  y="25" 
-                  width="4" 
-                  height="3" 
-                  fill="#FFD700" 
-                  fillOpacity="0.5" 
-                  stroke="#10B981" 
-                  strokeWidth="0.5"
-                />
-                <rect 
-                  x="46" 
-                  y="28" 
-                  width="8" 
-                  height="1" 
-                  fill="#FFD700" 
-                  fillOpacity="0.5" 
-                  stroke="#10B981" 
-                  strokeWidth="0.5"
-                />
-                
-                {/* Fair Play-Text */}
-                <text x="50" y="20" fontSize="3" textAnchor="middle" fill="#10B981" fontWeight="bold">
-                  FAIR PLAY
-                </text>
-              </g>
-            )}
+            <text x="50" y="22" fontSize="4" textAnchor="middle" fill="#10B981" fontWeight="bold">
+              FAIR PLAY
+            </text>
           </g>
         )}
       </svg>
@@ -898,26 +976,6 @@ const CommunityRulesSection = ({ isVisible }) => {
                     {rules[activeRule].description}
                   </p>
                 </div>
-                
-                {/* Animation-Steuerung - nur anzeigen wenn Animation aktiv läuft */}
-                {isAnimating && (
-                  <div className="flex justify-center mt-6">
-                    <div className="flex space-x-2">
-                      {[1, 2, 3, 4].map((dot) => (
-                        <button
-                          key={dot}
-                          onClick={() => setAnimationState(dot)}
-                          className={`h-2 transition-all duration-300 rounded-full ${
-                            animationState === dot 
-                              ? 'w-8 bg-primary-600 dark:bg-primary-500' 
-                              : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-primary-400 dark:hover:bg-primary-700'
-                          }`}
-                          aria-label={`Animation Phase ${dot}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
               
               {/* Dekorative Elemente hinter der Karte */}
