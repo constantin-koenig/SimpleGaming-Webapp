@@ -747,128 +747,50 @@ const CommunityRulesSection = ({ isVisible }) => {
     </div>
   );
   
-  // NEUE Animation für Fairplay mit Waage
+  // NEUE Animation für Fairplay mit Lottie Animation
   const renderFairplayAnimation = () => (
     <div className="h-48 w-48 mx-auto relative">
-      <svg viewBox="0 0 100 100" className="w-full h-full filter drop-shadow-lg">
-        {/* Hintergrund */}
-        <defs>
-          <radialGradient id="fairplayGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-            <stop offset="0%" stopColor="#10B981" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <circle cx="50" cy="50" r="40" fill="url(#fairplayGlow)" className={animationState >= 3 ? "animate-pulse" : ""} />
-        
-        {/* Waage - Mittelständer */}
-        <rect x="48" y="35" width="4" height="45" rx="1" fill="#10B981" />
-        <circle cx="50" cy="35" r="3" fill="#10B981" />
-        
-        {/* Waagenfuß */}
-        <path d="M30,80 H70 L65,75 H35 Z" fill="#10B981" />
-        <rect x="45" y="75" width="10" height="5" fill="#10B981" />
-        
-        {/* Waagebalken - rotiert basierend auf Animationsstatus */}
-        <g 
-          className="transition-all duration-700 origin-center" 
-          transform={`rotate(${
-            animationState === 1 ? '0' : 
-            animationState === 2 ? '-15' : 
-            animationState === 3 ? '-5' : 
-            '0'
-          }, 50, 35)`}
-        >
-          <rect x="20" y="33" width="60" height="4" rx="2" fill="#10B981" />
-          
-          {/* Links-Ketten */}
-          <line x1="25" y1="37" x2="25" y2="45" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1" />
-          <line x1="25" y1="45" x2="25" y2="50" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1" 
-            className={animationState === 2 ? "origin-top transition-all duration-500 transform scale-y-90" : ""}
+      {/* Hintergrund mit grünem Glow */}
+      <div className="absolute inset-0 rounded-full bg-gradient-radial from-green-500/20 to-transparent"></div>
+      
+      {/* Lottie Animation Container */}
+      <div className="relative w-full h-full flex items-center justify-center">
+        <iframe
+          src="https://lottie.host/embed/83d48b6a-008c-40c9-a887-1277ce9c15ab/pYB5uII6Nu.lottie"
+          className="w-full h-full border-0"
+          style={{
+            background: 'transparent',
+            borderRadius: '50%'
+          }}
+          title="Fairplay Animation"
+        />
+      </div>
+      
+      {/* Zusätzliche Effekte basierend auf Animationsstatus */}
+      {animationState >= 2 && (
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Pulsierender Ring */}
+          <div 
+            className="absolute inset-4 border-2 border-green-400 rounded-full animate-pulse opacity-50"
+            style={{animationDuration: "2s"}}
           />
-          
-          {/* Rechts-Ketten */}
-          <line x1="75" y1="37" x2="75" y2="45" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1" />
-          <line x1="75" y1="45" x2="75" y2="50" stroke="#10B981" strokeWidth="1" strokeDasharray="1,1"
-            className={animationState === 2 ? "origin-top transition-all duration-500 transform scale-y-110" : ""}
+        </div>
+      )}
+      
+      {animationState >= 3 && (
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Äußerer Ring mit Ping-Effekt */}
+          <div 
+            className="absolute inset-2 border border-green-300 rounded-full animate-ping opacity-30"
+            style={{animationDuration: "3s"}}
           />
-          
-          {/* Linke Waagschale */}
-          <g className={animationState === 2 ? "transition-transform duration-500 transform translate-y-2" : 
-                        animationState >= 3 ? "transition-transform duration-500 transform translate-y-0" : 
-                        "transition-transform duration-500 transform translate-y-0"}>
-            <ellipse cx="25" cy="50" rx="8" ry="2" fill="#10B981" fillOpacity="0.7" />
-            <circle cx="25" cy="48" r="6" fill="#3B82F6" fillOpacity="0.5" stroke="#3B82F6" strokeWidth="0.5" />
-          </g>
-          
-          {/* Rechte Waagschale */}
-          <g className={animationState === 2 ? "transition-transform duration-500 transform -translate-y-2" : 
-                        animationState >= 3 ? "transition-transform duration-500 transform translate-y-0" : 
-                        "transition-transform duration-500 transform translate-y-0"}>
-            <ellipse cx="75" cy="50" rx="8" ry="2" fill="#10B981" fillOpacity="0.7" />
-            <circle cx="75" cy="48" r="6" fill="#EF4444" fillOpacity="0.5" stroke="#EF4444" strokeWidth="0.5" />
-          </g>
-        </g>
-        
-        {/* Phase 2: Ungleiche Gewichte */}
-        {animationState >= 2 && (
-          <>
-            {/* Kleinere/größere Kreise für ungleiche Gewichte */}
-            {animationState === 2 && (
-              <>
-                <circle cx="25" cy="48" r="4" fill="#3B82F6" fillOpacity="0.7" className="animate-pulse" />
-                <circle cx="75" cy="48" r="8" fill="#EF4444" fillOpacity="0.7" className="animate-pulse" />
-              </>
-            )}
-          </>
-        )}
-        
-        {/* Phase 3-4: Zusätzliche Gewichte für Gleichgewicht */}
-        {animationState >= 3 && (
-          <>
-            <circle cx="25" cy="48" r="6" fill="#3B82F6" fillOpacity="0.7" className="animate-pulse" />
-            <circle cx="75" cy="48" r="6" fill="#EF4444" fillOpacity="0.7" className="animate-pulse" />
-            
-            {/* Ausgleich-Symbol */}
-            <g className="animate-pulse" style={{animationDuration: "2s"}}>
-              <rect x="45" y="15" width="10" height="10" fill="#10B981" fillOpacity="0.3" />
-              <text x="50" y="22" fontSize="5" textAnchor="middle" fill="#10B981" fontWeight="bold">
-                =
-              </text>
-            </g>
-          </>
-        )}
-        
-        {/* Phase 4: Fair-Play-Symbol */}
-        {animationState >= 4 && (
-          <g>
-            {/* Gerechtigkeits-Aura */}
-            <circle 
-              cx="50" 
-              cy="40" 
-              r="25" 
-              fill="#10B981" 
-              fillOpacity="0.1" 
-              stroke="#10B981" 
-              strokeWidth="0.5" 
-              strokeDasharray="2,2" 
-              className="animate-ping" 
-              style={{animationDuration: "3s"}}
-            />
-            
-            {/* Fair-Play-Emblem */}
-            <path 
-              d="M40,15 L60,15 L55,25 L45,25 Z" 
-              fill="#FFD700" 
-              fillOpacity="0.5" 
-              stroke="#10B981" 
-              strokeWidth="0.5"
-            />
-            <text x="50" y="22" fontSize="4" textAnchor="middle" fill="#10B981" fontWeight="bold">
-              FAIR PLAY
-            </text>
-          </g>
-        )}
-      </svg>
+        </div>
+      )}
+      
+      {/* Permanenter Kreis um die Animation */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-2 border-2 border-green-400/60 rounded-full"></div>
+      </div>
     </div>
   );
   
