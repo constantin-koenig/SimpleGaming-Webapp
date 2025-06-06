@@ -1,9 +1,8 @@
-// backend/models/serverStats.model.js
+// backend/models/serverStats.model.js - UPDATED mit GameStats Integration
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const serverStatsSchema = new Schema({
-  // Eindeutiger Identifier - immer 'global' für server-weite Stats
   identifier: {
     type: String,
     default: 'global',
@@ -11,23 +10,30 @@ const serverStatsSchema = new Schema({
     index: true
   },
   
-  // Community Zahlen
   community: {
     totalMembers: { type: Number, default: 0 },
-    activeMembers: { type: Number, default: 0 }, // Aktiv in letzten 7 Tagen
+    activeMembers: { type: Number, default: 0 },
     newMembersToday: { type: Number, default: 0 },
     newMembersThisWeek: { type: Number, default: 0 },
     newMembersThisMonth: { type: Number, default: 0 }
   },
 
-  // Gaming Statistiken
   gaming: {
     totalVoiceMinutes: { type: Number, default: 0 },
     totalGamesPlayed: { type: Number, default: 0 },
     activeVoiceSessions: { type: Number, default: 0 },
+    // ✅ ENHANCED: Bessere Gaming-Statistiken
+    totalGamingSessions: { type: Number, default: 0 },
+    totalGamingHours: { type: Number, default: 0 },
+    uniqueGamesPlayed: { type: Number, default: 0 },
+    currentlyPlaying: { type: Number, default: 0 },
     popularGames: [{
       name: { type: String, required: true },
       playCount: { type: Number, default: 0 },
+      uniquePlayers: { type: Number, default: 0 },
+      totalHours: { type: Number, default: 0 },
+      currentPlayers: { type: Number, default: 0 },
+      category: { type: String, default: 'Game' },
       lastPlayed: { type: Date }
     }],
     voiceChannelStats: [{
@@ -37,7 +43,6 @@ const serverStatsSchema = new Schema({
     }]
   },
 
-  // Kommunikation
   communication: {
     totalMessages: { type: Number, default: 0 },
     messagesThisWeek: { type: Number, default: 0 },
@@ -46,15 +51,13 @@ const serverStatsSchema = new Schema({
     activeChannels: { type: Number, default: 0 }
   },
 
-  // Events & Aktivitäten
   events: {
     totalEventsAttended: { type: Number, default: 0 },
     upcomingEvents: { type: Number, default: 0 },
-    eventParticipationRate: { type: Number, default: 0 }, // Prozent
+    eventParticipationRate: { type: Number, default: 0 },
     mostPopularEventType: String
   },
 
-  // Top-Listen (für Homepage Highlights)
   topLists: {
     mostActiveUsers: [{
       username: { type: String, required: true },
@@ -71,19 +74,18 @@ const serverStatsSchema = new Schema({
     topGamers: [{
       username: { type: String, required: true },
       gamesPlayed: { type: Number, default: 0 },
+      totalGamingHours: { type: Number, default: 0 },
       favoriteGame: String
     }]
   },
 
-  // Performance & System
   system: {
-    botUptime: { type: Number, default: 0 }, // in Stunden
+    botUptime: { type: Number, default: 0 },
     lastStatsUpdate: { type: Date, default: Date.now },
-    updateFrequency: { type: String, default: '15min' }, // Wie oft Updates
-    dataAccuracy: { type: String, default: '95%' } // Genauigkeit der Daten
+    updateFrequency: { type: String, default: '15min' },
+    dataAccuracy: { type: String, default: '95%' }
   },
 
-  // Zeitstempel für verschiedene Perioden
   periods: {
     lastHour: {
       messages: { type: Number, default: 0 },
@@ -107,21 +109,17 @@ const serverStatsSchema = new Schema({
   timestamps: true 
 });
 
-// Virtual field für Voice-Stunden (berechnet aus Minuten)
 serverStatsSchema.virtual('gaming.voiceHours').get(function() {
   return Math.floor(this.gaming.totalVoiceMinutes / 60);
 });
 
-// Index für schnelle Abfragen
 serverStatsSchema.index({ identifier: 1 });
 serverStatsSchema.index({ 'system.lastStatsUpdate': -1 });
 
-// Statische Methode zum Abrufen der aktuellen Stats
 serverStatsSchema.statics.getCurrentStats = async function() {
   let stats = await this.findOne({ identifier: 'global' });
   
   if (!stats) {
-    // Erstelle initiale Stats wenn nicht vorhanden
     stats = await this.create({
       identifier: 'global'
     });
@@ -131,7 +129,7 @@ serverStatsSchema.statics.getCurrentStats = async function() {
   return stats;
 };
 
-// Statische Methode zum Aktualisieren der Stats
+// ✅ ENHANCED: Server Stats Update mit GameStats Integration
 serverStatsSchema.statics.updateServerStats = async function() {
   try {
     console.log('🔄 Updating server stats...');
@@ -140,8 +138,8 @@ serverStatsSchema.statics.updateServerStats = async function() {
     const User = require('./user.model');
     const UserActivity = require('./userActivity.model');
     const VoiceSession = require('./voiceSession.model');
+    const GameStats = require('./gameStats.model'); // ✅ NEU
     
-    // Aktuelle Stats holen oder erstellen
     let stats = await this.getCurrentStats();
     
     // Community Stats berechnen
@@ -166,35 +164,57 @@ serverStatsSchema.statics.updateServerStats = async function() {
       createdAt: { $gte: oneMonthAgo }
     });
 
-    // Gaming Stats aggregieren
-    const gamingStats = await User.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalVoiceMinutes: { $sum: '$stats.voiceMinutes' },
-          totalGamesPlayed: { $sum: '$stats.gamesPlayed' },
-          totalMessages: { $sum: '$stats.messagesCount' },
-          totalEventsAttended: { $sum: '$stats.eventsAttended' }
+    // ✅ ENHANCED: Gaming Stats aus User + GameStats aggregieren
+    const [userGamingStats, gameStatsData] = await Promise.all([
+      User.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalVoiceMinutes: { $sum: '$stats.voiceMinutes' },
+            totalGamesPlayed: { $sum: '$stats.gamesPlayed' },
+            totalMessages: { $sum: '$stats.messagesCount' },
+            totalEventsAttended: { $sum: '$stats.eventsAttended' }
+          }
         }
-      }
+      ]),
+      GameStats.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalGamingSessions: { $sum: '$stats.totalSessions' },
+            totalGamingMinutes: { $sum: '$stats.totalMinutes' },
+            uniqueGamesPlayed: { $sum: 1 },
+            currentlyPlaying: { $sum: '$currentActivity.currentPlayers' }
+          }
+        }
+      ])
     ]);
     
-    const totals = gamingStats[0] || {
+    const userTotals = userGamingStats[0] || {
       totalVoiceMinutes: 0,
       totalGamesPlayed: 0,
       totalMessages: 0,
       totalEventsAttended: 0
     };
 
-    // Aktive Voice Sessions
+    const gameTotals = gameStatsData[0] || {
+      totalGamingSessions: 0,
+      totalGamingMinutes: 0,
+      uniqueGamesPlayed: 0,
+      currentlyPlaying: 0
+    };
+
+    // ✅ Aktive Voice Sessions
     const activeVoiceSessions = await VoiceSession.countDocuments({ isActive: true });
 
-    // Top-Listen generieren
-    const mostActiveUsers = await this.generateTopActiveUsers();
-    const topGamers = await this.generateTopGamers();
-    
-    // Popular Games aus Activities
-    const popularGames = await this.generatePopularGames();
+    // ✅ Popular Games aus GameStats holen
+    const popularGames = await GameStats.getHomepageGames(10);
+
+    // ✅ Top-Listen generieren
+    const [mostActiveUsers, topGamers] = await Promise.all([
+      this.generateTopActiveUsers(),
+      this.generateTopGamers()
+    ]);
 
     // Nachrichten-Statistiken für Zeiträume
     const messagesThisWeek = await UserActivity.countDocuments({
@@ -207,7 +227,7 @@ serverStatsSchema.statics.updateServerStats = async function() {
       timestamp: { $gte: oneMonthAgo }
     });
 
-    // Stats-Objekt aktualisieren
+    // ✅ Stats-Objekt aktualisieren
     stats.community = {
       totalMembers,
       activeMembers,
@@ -217,22 +237,35 @@ serverStatsSchema.statics.updateServerStats = async function() {
     };
 
     stats.gaming = {
-      totalVoiceMinutes: totals.totalVoiceMinutes,
-      totalGamesPlayed: totals.totalGamesPlayed,
+      totalVoiceMinutes: userTotals.totalVoiceMinutes,
+      totalGamesPlayed: userTotals.totalGamesPlayed,
       activeVoiceSessions,
-      popularGames: popularGames.slice(0, 10) // Top 10
+      // ✅ NEU: Erweiterte Gaming-Stats
+      totalGamingSessions: gameTotals.totalGamingSessions,
+      totalGamingHours: Math.floor(gameTotals.totalGamingMinutes / 60),
+      uniqueGamesPlayed: gameTotals.uniqueGamesPlayed,
+      currentlyPlaying: gameTotals.currentlyPlaying,
+      popularGames: popularGames.map(game => ({
+        name: game.name,
+        playCount: game.sessions,
+        uniquePlayers: game.players,
+        totalHours: game.totalHours,
+        currentPlayers: game.currentPlayers,
+        category: game.category,
+        lastPlayed: game.lastSeen
+      }))
     };
 
     stats.communication = {
-      totalMessages: totals.totalMessages,
+      totalMessages: userTotals.totalMessages,
       messagesThisWeek,
       messagesThisMonth,
       averageMessagesPerDay: Math.floor(messagesThisMonth / 30)
     };
 
     stats.events = {
-      totalEventsAttended: totals.totalEventsAttended,
-      eventParticipationRate: totalMembers > 0 ? Math.floor((totals.totalEventsAttended / totalMembers) * 100) : 0
+      totalEventsAttended: userTotals.totalEventsAttended,
+      eventParticipationRate: totalMembers > 0 ? Math.floor((userTotals.totalEventsAttended / totalMembers) * 100) : 0
     };
 
     stats.topLists = {
@@ -242,16 +275,15 @@ serverStatsSchema.statics.updateServerStats = async function() {
 
     stats.system = {
       lastStatsUpdate: new Date(),
-      updateFrequency: '15min',
+      updateFrequency: '5min',
       dataAccuracy: '98%'
     };
 
-    // Speichern
     await stats.save();
     
     const updateTime = Date.now() - startTime;
     console.log(`✅ Server stats updated in ${updateTime}ms`);
-    console.log(`📊 Stats: ${totalMembers} members, ${activeMembers} active, ${Math.floor(totals.totalVoiceMinutes/60)}h voice`);
+    console.log(`📊 Stats: ${totalMembers} members, ${activeMembers} active, ${Math.floor(userTotals.totalVoiceMinutes/60)}h voice, ${gameTotals.currentlyPlaying} playing`);
     
     return stats;
   } catch (error) {
@@ -260,7 +292,6 @@ serverStatsSchema.statics.updateServerStats = async function() {
   }
 };
 
-// Helper: Top aktive User generieren
 serverStatsSchema.statics.generateTopActiveUsers = async function() {
   try {
     const UserActivity = require('./userActivity.model');
@@ -292,7 +323,7 @@ serverStatsSchema.statics.generateTopActiveUsers = async function() {
       { $unwind: '$user' },
       {
         $project: {
-          _id: 0, // _id ausschließen
+          _id: 0,
           username: '$user.username',
           avatar: '$user.avatar',
           activityScore: '$activityCount',
@@ -301,7 +332,6 @@ serverStatsSchema.statics.generateTopActiveUsers = async function() {
       }
     ]);
     
-    // Nur User mit gültigen Daten zurückgeben
     return topUsers.filter(user => 
       user.username && 
       typeof user.username === 'string' && 
@@ -313,11 +343,13 @@ serverStatsSchema.statics.generateTopActiveUsers = async function() {
   }
 };
 
-// Helper: Top Gamer generieren
+// ✅ ENHANCED: Top Gamer mit Gaming-Stunden
 serverStatsSchema.statics.generateTopGamers = async function() {
   try {
     const User = require('./user.model');
+    const GameStats = require('./gameStats.model');
     
+    // Kombination aus User-Stats und detaillierten Gaming-Sessions
     const topGamers = await User.aggregate([
       {
         $match: {
@@ -326,7 +358,7 @@ serverStatsSchema.statics.generateTopGamers = async function() {
       },
       {
         $project: {
-          _id: 0, // _id ausschließen
+          _id: 0,
           username: 1,
           avatar: 1,
           gamesPlayed: '$stats.gamesPlayed',
@@ -337,7 +369,66 @@ serverStatsSchema.statics.generateTopGamers = async function() {
       { $limit: 10 }
     ]);
     
-    // Nur Gamer mit gültigen Daten
+    // ✅ Gaming-Stunden aus UserActivity berechnen
+    const UserActivity = require('./userActivity.model');
+    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    
+    for (const gamer of topGamers) {
+      try {
+        const User = require('./user.model');
+        const user = await User.findOne({ username: gamer.username });
+        
+        if (user) {
+          // Gaming-Sessions-Stunden berechnen
+          const gamingSessions = await UserActivity.aggregate([
+            {
+              $match: {
+                userId: user._id,
+                activityType: { $in: ['GAME_END', 'GAME_SWITCH'] },
+                timestamp: { $gte: oneMonthAgo },
+                'metadata.duration': { $exists: true }
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                totalMinutes: { $sum: '$metadata.duration' }
+              }
+            }
+          ]);
+          
+          const totalGamingMinutes = gamingSessions[0]?.totalMinutes || 0;
+          gamer.totalGamingHours = Math.floor(totalGamingMinutes / 60);
+          
+          // Lieblingsspiel aus tatsächlichen Sessions ermitteln
+          const favoriteGameQuery = await UserActivity.aggregate([
+            {
+              $match: {
+                userId: user._id,
+                activityType: 'GAME_START',
+                'metadata.gameName': { $exists: true }
+              }
+            },
+            {
+              $group: {
+                _id: '$metadata.gameName',
+                count: { $sum: 1 }
+              }
+            },
+            { $sort: { count: -1 } },
+            { $limit: 1 }
+          ]);
+          
+          if (favoriteGameQuery[0]) {
+            gamer.favoriteGame = favoriteGameQuery[0]._id;
+          }
+        }
+      } catch (userError) {
+        console.error(`Error processing gamer ${gamer.username}:`, userError);
+        gamer.totalGamingHours = 0;
+      }
+    }
+    
     return topGamers.filter(gamer => 
       gamer.username && 
       typeof gamer.username === 'string' && 
@@ -349,54 +440,7 @@ serverStatsSchema.statics.generateTopGamers = async function() {
   }
 };
 
-// Helper: Beliebte Spiele generieren
-serverStatsSchema.statics.generatePopularGames = async function() {
-  try {
-    const UserActivity = require('./userActivity.model');
-    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    
-    const popularGames = await UserActivity.aggregate([
-      {
-        $match: {
-          activityType: { $in: ['GAME_START', 'GAME_END'] },
-          timestamp: { $gte: oneMonthAgo },
-          'metadata.gameName': { $exists: true, $ne: null, $ne: '' }
-        }
-      },
-      {
-        $group: {
-          _id: '$metadata.gameName',
-          playCount: { $sum: 1 },
-          lastPlayed: { $max: '$timestamp' }
-        }
-      },
-      {
-        $project: {
-          _id: 0, // Wichtig: _id ausschließen um Mongoose-Konflikt zu vermeiden
-          name: '$_id',
-          playCount: 1,
-          lastPlayed: 1
-        }
-      },
-      { $sort: { playCount: -1 } },
-      { $limit: 15 }
-    ]);
-    
-    // Zusätzliche Bereinigung: Nur gültige Spiele
-    return popularGames.filter(game => 
-      game.name && 
-      typeof game.name === 'string' && 
-      game.name.length > 0 &&
-      game.name !== 'Unknown' &&
-      !game.name.includes('Visual Studio') // Dev-Tools ausschließen
-    );
-  } catch (error) {
-    console.error('Error generating popular games:', error);
-    return [];
-  }
-};
-
-// Methode für kompakte Homepage-Stats
+// ✅ ENHANCED: Homepage-Stats mit Gaming-Details
 serverStatsSchema.methods.getHomepageStats = function() {
   return {
     members: {
@@ -405,15 +449,21 @@ serverStatsSchema.methods.getHomepageStats = function() {
       newThisWeek: this.community.newMembersThisWeek
     },
     activity: {
-      totalVoiceHours: Math.floor(this.gaming.totalVoiceMinutes / 60), // Berechnet aus Minuten
+      totalVoiceHours: Math.floor(this.gaming.totalVoiceMinutes / 60),
       totalVoiceMinutes: this.gaming.totalVoiceMinutes,
       totalMessages: this.communication.totalMessages,
       activeVoiceSessions: this.gaming.activeVoiceSessions,
-      gamesPlayed: this.gaming.totalGamesPlayed
+      gamesPlayed: this.gaming.totalGamesPlayed,
+      // ✅ NEU: Erweiterte Gaming-Stats für Homepage
+      totalGamingSessions: this.gaming.totalGamingSessions,
+      totalGamingHours: this.gaming.totalGamingHours,
+      uniqueGamesPlayed: this.gaming.uniqueGamesPlayed,
+      currentlyPlaying: this.gaming.currentlyPlaying
     },
     highlights: {
       topUsers: this.topLists.mostActiveUsers.slice(0, 3),
-      popularGames: this.gaming.popularGames.slice(0, 5)
+      popularGames: this.gaming.popularGames.slice(0, 5),
+      topGamers: this.topLists.topGamers.slice(0, 3)
     },
     lastUpdate: this.system.lastStatsUpdate
   };

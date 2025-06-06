@@ -1,221 +1,197 @@
-// backend/models/userActivity.model.js
+// 1. ENHANCED Gaming Activity Model
+// backend/models/gamingActivity.model.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const userActivitySchema = new Schema({
+const gamingActivitySchema = new Schema({
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
     index: true
   },
-  activityType: {
+  discordUserId: {
     type: String,
     required: true,
-    enum: [
-      'MESSAGE',           // Nachricht gesendet
-      'VOICE_JOIN',        // Voice Channel betreten
-      'VOICE_LEAVE',       // Voice Channel verlassen
-      'VOICE_SWITCH',      // Voice Channel gewechselt
-      'GAME_START',        // Spiel gestartet
-      'GAME_END',          // Spiel beendet
-      'GAME_SWITCH',       // Spiel gewechselt
-      'SERVER_JOIN',       // Server beigetreten
-      'SERVER_LEAVE',      // Server verlassen
-      'EVENT_JOINED',      // Event beigetreten
-      'EVENT_LEFT',        // Event verlassen
-      'EVENT_WON',         // Event gewonnen
-      'ROLE_ADDED',        // Rolle hinzugefügt
-      'ROLE_REMOVED',      // Rolle entfernt
-      'REACTION_ADDED',    // Reaktion hinzugefügt
-      'REACTION_REMOVED'   // Reaktion entfernt
-    ],
     index: true
   },
-  metadata: {
-    // Flexible Datenstruktur für verschiedene Activity-Types
-    type: Schema.Types.Mixed,
-    default: {}
+  gameName: {
+    type: String,
+    required: true,
+    index: true
   },
-  timestamp: {
+  // Normalisierter Spielname für bessere Gruppierung
+  gameNameNormalized: {
+    type: String,
+    required: true,
+    index: true
+  },
+  activityType: {
+    type: String,
+    enum: ['PLAYING', 'STREAMING'],
+    default: 'PLAYING'
+  },
+  startTime: {
     type: Date,
-    default: Date.now,
+    required: true,
+    default: Date.now
+  },
+  endTime: {
+    type: Date
+  },
+  duration: {
+    type: Number, // Minuten
+    default: 0
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
     index: true
   },
-  // Für Leistungsoptimierung
-  dayKey: {
-    type: String,
-    index: true
-  },
-  weekKey: {
-    type: String,
-    index: true
-  },
-  monthKey: {
-    type: String,
-    index: true
+  // Session-spezifische Daten
+  sessionData: {
+    platform: String, // Discord, Steam, etc.
+    details: String, // z.B. "Playing Solo", "In Lobby"
+    state: String, // z.B. Level, Rank
+    largeImageKey: String,
+    smallImageKey: String
   }
 }, { 
-  timestamps: true,
-  // TTL Index für automatisches Löschen alter Aktivitäten (nach 1 Jahr)
-  expires: 365 * 24 * 60 * 60 // 1 Jahr in Sekunden
-});
-
-// Middleware für automatische Key-Generierung
-userActivitySchema.pre('save', function(next) {
-  const date = this.timestamp || new Date();
-  
-  // YYYY-MM-DD Format für Tagesstatistiken
-  this.dayKey = date.toISOString().split('T')[0];
-  
-  // YYYY-WW Format für Wochenstatistiken
-  const startOfYear = new Date(date.getFullYear(), 0, 1);
-  const weekNumber = Math.ceil(((date - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-  this.weekKey = `${date.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
-  
-  // YYYY-MM Format für Monatsstatistiken
-  this.monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-  
-  next();
+  timestamps: true 
 });
 
 // Compound Indexes für bessere Performance
-userActivitySchema.index({ userId: 1, activityType: 1, timestamp: -1 });
-userActivitySchema.index({ userId: 1, dayKey: 1 });
-userActivitySchema.index({ userId: 1, weekKey: 1 });
-userActivitySchema.index({ userId: 1, monthKey: 1 });
-userActivitySchema.index({ activityType: 1, timestamp: -1 });
+gamingActivitySchema.index({ gameNameNormalized: 1, isActive: 1 });
+gamingActivitySchema.index({ userId: 1, isActive: 1 });
+gamingActivitySchema.index({ startTime: -1, gameNameNormalized: 1 });
 
-// Statische Methoden für Statistiken
-userActivitySchema.statics.getActivityStats = async function(userId, timeframe = 'month') {
-  const match = { userId: mongoose.Types.ObjectId(userId) };
+// Middleware: Spielname normalisieren
+gamingActivitySchema.pre('save', function(next) {
+  if (this.gameName) {
+    // Normalisierung für bessere Gruppierung
+    this.gameNameNormalized = this.gameName
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '') // Sonderzeichen entfernen
+      .replace(/\s+/g, '_') // Leerzeichen durch Underscores
+      .trim();
+  }
+  next();
+});
+
+// Session beenden und Statistiken aktualisieren
+gamingActivitySchema.methods.endSession = async function() {
+  if (!this.isActive) return 0;
   
-  // Zeitraum-spezifische Filter
+  const endTime = new Date();
+  const duration = Math.floor((endTime - this.startTime) / 1000 / 60); // Minuten
+  
+  this.endTime = endTime;
+  this.duration = duration;
+  this.isActive = false;
+  
+  await this.save();
+  
+  // User-Statistiken aktualisieren
+  if (duration > 0) {
+    const User = require('./user.model');
+    await User.findByIdAndUpdate(this.userId, {
+      $inc: { 
+        'stats.gamesPlayed': 1,
+        'stats.totalGamingMinutes': duration
+      },
+      $set: { 'stats.lastSeen': endTime },
+      $addToSet: { 'preferences.favoriteGames': this.gameName }
+    });
+    
+    console.log(`🎮 Gaming session ended: ${this.gameName} - ${duration} minutes`);
+  }
+  
+  return duration;
+};
+
+// Statische Methoden für Gaming-Statistiken
+gamingActivitySchema.statics.getPopularGames = async function(timeframe = 'month', limit = 10) {
   const now = new Date();
-  switch (timeframe) {
+  let dateFilter = {};
+  
+  switch(timeframe) {
     case 'day':
-      match.dayKey = now.toISOString().split('T')[0];
+      dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
       break;
     case 'week':
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      const weekNumber = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-      match.weekKey = `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
+      dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
       break;
     case 'month':
-      match.monthKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+      dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
       break;
     case 'all':
-      // Keine zusätzlichen Filter
+      dateFilter = {}; // Keine Zeitbegrenzung
       break;
   }
-  
-  return await this.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: '$activityType',
-        count: { $sum: 1 },
-        lastActivity: { $max: '$timestamp' },
-        totalDuration: {
-          $sum: {
-            $cond: {
-              if: { $exists: ['$metadata.duration'] },
-              then: '$metadata.duration',
-              else: 0
-            }
-          }
-        }
-      }
-    }
-  ]);
-};
-
-userActivitySchema.statics.getTopActiveUsers = async function(timeframe = 'month', limit = 10) {
-  const match = {};
-  
-  // Zeitraum-spezifische Filter
-  const now = new Date();
-  switch (timeframe) {
-    case 'day':
-      match.dayKey = now.toISOString().split('T')[0];
-      break;
-    case 'week':
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      const weekNumber = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-      match.weekKey = `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
-      break;
-    case 'month':
-      match.monthKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-      break;
-  }
-  
-  return await this.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: '$userId',
-        totalActivities: { $sum: 1 },
-        lastActivity: { $max: '$timestamp' },
-        activityTypes: { $addToSet: '$activityType' }
-      }
-    },
-    { $sort: { totalActivities: -1 } },
-    { $limit: limit },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'user'
-      }
-    },
-    { $unwind: '$user' },
-    {
-      $project: {
-        username: '$user.username',
-        avatar: '$user.avatar',
-        totalActivities: 1,
-        lastActivity: 1,
-        activityTypes: 1
-      }
-    }
-  ]);
-};
-
-userActivitySchema.statics.getActivityTrends = async function(userId, days = 30) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
   
   return await this.aggregate([
     {
       $match: {
-        userId: mongoose.Types.ObjectId(userId),
-        timestamp: { $gte: startDate }
+        duration: { $gt: 0 }, // Nur beendete Sessions
+        ...(Object.keys(dateFilter).length > 0 && { startTime: dateFilter })
       }
     },
     {
       $group: {
-        _id: {
-          date: '$dayKey',
-          type: '$activityType'
-        },
-        count: { $sum: 1 }
+        _id: '$gameNameNormalized',
+        originalName: { $first: '$gameName' },
+        totalSessions: { $sum: 1 },
+        totalMinutes: { $sum: '$duration' },
+        totalHours: { $sum: { $divide: ['$duration', 60] } },
+        uniquePlayers: { $addToSet: '$userId' },
+        lastPlayed: { $max: '$startTime' },
+        averageSessionLength: { $avg: '$duration' }
       }
     },
     {
-      $group: {
-        _id: '$_id.date',
-        activities: {
-          $push: {
-            type: '$_id.type',
-            count: '$count'
-          }
-        },
-        totalCount: { $sum: '$count' }
+      $project: {
+        _id: 0,
+        gameName: '$originalName',
+        gameKey: '$_id',
+        totalSessions: 1,
+        totalMinutes: 1,
+        totalHours: { $round: ['$totalHours', 1] },
+        uniquePlayersCount: { $size: '$uniquePlayers' },
+        lastPlayed: 1,
+        averageSessionLength: { $round: ['$averageSessionLength', 1] }
       }
     },
-    { $sort: { '_id': 1 } }
+    { $sort: { totalSessions: -1, totalMinutes: -1 } },
+    { $limit: limit }
   ]);
 };
 
-module.exports = mongoose.model('UserActivity', userActivitySchema);
+gamingActivitySchema.statics.getCurrentlyPlaying = async function() {
+  return await this.aggregate([
+    {
+      $match: { isActive: true }
+    },
+    {
+      $group: {
+        _id: '$gameNameNormalized',
+        gameName: { $first: '$gameName' },
+        activePlayers: { $addToSet: '$userId' },
+        activeCount: { $sum: 1 },
+        longestSession: { $max: { $subtract: [new Date(), '$startTime'] } }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        gameName: 1,
+        gameKey: '$_id',
+        activePlayersCount: { $size: '$activePlayers' },
+        activeSessionsCount: '$activeCount',
+        longestSessionMinutes: { $divide: ['$longestSession', 60000] }
+      }
+    },
+    { $sort: { activePlayersCount: -1 } }
+  ]);
+};
+
+module.exports = mongoose.model('GamingActivity', gamingActivitySchema);

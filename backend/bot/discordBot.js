@@ -1,8 +1,9 @@
-// backend/bot/discordBot.js - FIXED mit Presence Tracking
+// backend/bot/discordBot.js - UPDATED mit GameStats Integration
 const { Client, GatewayIntentBits, Events, ActivityType } = require('discord.js');
 const User = require('../models/user.model');
 const UserActivity = require('../models/userActivity.model');
 const VoiceSession = require('../models/voiceSession.model');
+const GameStats = require('../models/gameStats.model'); // ✅ NEU
 const AutoSyncScheduler = require('./autoSync');
 
 class DiscordBot {
@@ -14,14 +15,14 @@ class DiscordBot {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildPresences // ✅ HINZUGEFÜGT für Online-Status
+        GatewayIntentBits.GuildPresences
       ]
     });
 
     // Memory cache für Performance
     this.voiceSessions = new Map();
-    this.gamingSessions = new Map();
-    this.presenceCache = new Map(); // ✅ NEU: Online-Status Cache
+    this.gamingSessions = new Map(); // ✅ ENHANCED: Detaillierteres Gaming-Tracking
+    this.presenceCache = new Map();
     this.autoSyncScheduler = null;
     
     this.initializeEventListeners();
@@ -37,10 +38,10 @@ class DiscordBot {
 
       await this.restoreActiveSessions();
       await this.syncAllMembers();
-      await this.initializePresenceCache(); // ✅ NEU
+      await this.initializePresenceCache();
+      await this.initializeGameStats(); // ✅ NEU
       this.startAutoSync();
       
-      // Log verfügbare Intents
       console.log('🔐 Bot Intents aktiv:', this.getActiveIntents());
     });
 
@@ -69,7 +70,66 @@ class DiscordBot {
     });
   }
 
-  // ✅ NEU: Presence Cache initialisieren
+  // ✅ NEU: Game Stats beim Bot-Start initialisieren
+  async initializeGameStats() {
+    try {
+      console.log('🎮 Initializing game stats from current presences...');
+      
+      let totalGames = 0;
+      let trackedGames = 0;
+      
+      for (const [guildId, guild] of this.client.guilds.cache) {
+        const members = await guild.members.fetch();
+        
+        for (const [memberId, member] of members) {
+          if (member.user.bot) continue;
+          
+          const presence = member.presence;
+          if (presence && presence.activities) {
+            const games = presence.activities.filter(activity => 
+              activity.type === ActivityType.Playing || 
+              activity.type === ActivityType.Streaming
+            );
+            
+            for (const game of games) {
+              totalGames++;
+              
+              // User aus DB holen
+              const user = await User.findOne({ discordId: member.user.id });
+              if (user) {
+                // Game Stats aktualisieren
+                await GameStats.updateGameStats(
+                  game.name, 
+                  user._id.toString(), 
+                  'GAME_START'
+                );
+                
+                // Memory Session erstellen
+                this.gamingSessions.set(member.user.id, {
+                  game: game.name,
+                  startTime: new Date(),
+                  userId: user._id.toString()
+                });
+                
+                trackedGames++;
+              }
+            }
+          }
+        }
+      }
+      
+      console.log(`✅ Game stats initialized: ${trackedGames}/${totalGames} games tracked`);
+      
+      // Cleanup-Task starten
+      setInterval(async () => {
+        await GameStats.cleanupOldData();
+      }, 24 * 60 * 60 * 1000); // Täglich
+      
+    } catch (error) {
+      console.error('❌ Error initializing game stats:', error);
+    }
+  }
+
   async initializePresenceCache() {
     try {
       console.log('🔄 Initializing presence cache...');
@@ -80,7 +140,6 @@ class DiscordBot {
       for (const [guildId, guild] of this.client.guilds.cache) {
         console.log(`📊 Scanning presence in guild: ${guild.name}`);
         
-        // Alle Mitglieder mit Präsenz-Info laden
         const members = await guild.members.fetch();
         
         for (const [memberId, member] of members) {
@@ -88,7 +147,6 @@ class DiscordBot {
           
           totalMembers++;
           
-          // Presence Status checken
           const presence = member.presence;
           if (presence && ['online', 'idle', 'dnd'].includes(presence.status)) {
             onlineMembers++;
@@ -103,7 +161,6 @@ class DiscordBot {
       
       console.log(`✅ Presence cache initialized: ${onlineMembers}/${totalMembers} members online`);
       
-      // ✅ FIXED: Cache refreshen statt leeren
       setInterval(() => {
         this.refreshPresenceCache();
       }, 5 * 60 * 1000);
@@ -113,7 +170,6 @@ class DiscordBot {
     }
   }
 
-  // ✅ NEU: Presence Cache refreshen statt leeren
   async refreshPresenceCache() {
     try {
       console.log('🔄 Refreshing presence cache...');
@@ -128,7 +184,6 @@ class DiscordBot {
         for (const [memberId, member] of members) {
           if (member.user.bot) continue;
           
-          // Aktuellen Presence-Status prüfen
           const presence = member.presence;
           if (presence && ['online', 'idle', 'dnd'].includes(presence.status)) {
             newCache.set(member.user.id, {
@@ -141,7 +196,6 @@ class DiscordBot {
         }
       }
       
-      // Cache ersetzen
       this.presenceCache = newCache;
       
       console.log(`✅ Presence cache refreshed: ${onlineCount} online (was ${oldSize})`);
@@ -150,6 +204,7 @@ class DiscordBot {
       console.error('❌ Error refreshing presence cache:', error);
     }
   }
+
   getActiveIntents() {
     const intents = [];
     const intentBits = this.client.options.intents;
@@ -163,7 +218,7 @@ class DiscordBot {
     return intents;
   }
 
-  // ✅ ERWEITERT: Presence Update Handler
+  // ✅ ENHANCED: Verbessertes Presence Update Handling mit GameStats
   async handlePresenceUpdate(oldPresence, newPresence) {
     if (!newPresence || !newPresence.member || newPresence.member.user.bot) return;
 
@@ -171,7 +226,6 @@ class DiscordBot {
     const username = newPresence.member.user.username;
     
     try {
-      // ✅ FIXED: Robusteres Cache-Management
       const oldStatus = oldPresence?.status || 'offline';
       const newStatus = newPresence.status || 'offline';
       
@@ -188,17 +242,15 @@ class DiscordBot {
           lastSeen: new Date()
         });
         
-        // User in DB als "last seen" aktualisieren
         await User.findOneAndUpdate(
           { discordId: userId },
           { 'stats.lastSeen': new Date() }
         );
       } else {
-        // User ist offline - aus Cache entfernen
         this.presenceCache.delete(userId);
       }
 
-      // Gaming-Session tracking (existierender Code)
+      // ✅ ENHANCED: Gaming-Session tracking mit GameStats
       const user = await User.findOne({ discordId: userId });
       if (!user) return;
 
@@ -212,10 +264,19 @@ class DiscordBot {
       const previousSession = this.gamingSessions.get(userId);
 
       if (currentGame && !previousSession) {
+        // ✅ Neues Spiel gestartet
         this.gamingSessions.set(userId, {
           game: currentGame.name,
-          startTime: new Date()
+          startTime: new Date(),
+          userId: user._id.toString()
         });
+
+        // GameStats aktualisieren
+        await GameStats.updateGameStats(
+          currentGame.name, 
+          user._id.toString(), 
+          'GAME_START'
+        );
 
         await this.logActivity(user._id, 'GAME_START', {
           gameName: currentGame.name,
@@ -225,12 +286,21 @@ class DiscordBot {
         console.log(`🎮 ${username} started playing ${currentGame.name}`);
       } 
       else if (!currentGame && previousSession) {
+        // ✅ Spiel beendet
         const duration = Math.floor((new Date() - previousSession.startTime) / 1000 / 60);
         
         await User.findByIdAndUpdate(user._id, {
           $inc: { 'stats.gamesPlayed': 1 },
           'stats.lastSeen': new Date()
         });
+
+        // GameStats aktualisieren
+        await GameStats.updateGameStats(
+          previousSession.game, 
+          user._id.toString(), 
+          'GAME_END',
+          duration
+        );
 
         await this.logActivity(user._id, 'GAME_END', {
           gameName: previousSession.game,
@@ -241,11 +311,27 @@ class DiscordBot {
         console.log(`🎮 ${username} stopped playing ${previousSession.game} after ${duration} minutes`);
       }
       else if (currentGame && previousSession && currentGame.name !== previousSession.game) {
+        // ✅ Spiel gewechselt
         const duration = Math.floor((new Date() - previousSession.startTime) / 1000 / 60);
         
         await User.findByIdAndUpdate(user._id, {
           $inc: { 'stats.gamesPlayed': 1 }
         });
+
+        // Altes Spiel beenden
+        await GameStats.updateGameStats(
+          previousSession.game, 
+          user._id.toString(), 
+          'GAME_SWITCH',
+          duration
+        );
+
+        // Neues Spiel starten
+        await GameStats.updateGameStats(
+          currentGame.name, 
+          user._id.toString(), 
+          'GAME_START'
+        );
 
         await this.logActivity(user._id, 'GAME_SWITCH', {
           fromGame: previousSession.game,
@@ -255,7 +341,8 @@ class DiscordBot {
 
         this.gamingSessions.set(userId, {
           game: currentGame.name,
-          startTime: new Date()
+          startTime: new Date(),
+          userId: user._id.toString()
         });
 
         console.log(`🎮 ${username} switched from ${previousSession.game} to ${currentGame.name}`);
@@ -265,7 +352,49 @@ class DiscordBot {
     }
   }
 
-  // ✅ NEU: Live Discord-Stats abrufen
+  // ✅ NEU: Live Gaming-Stats abrufen
+  async getLiveGamingStats() {
+    try {
+      // Aktuelle Spieler aus Memory
+      const currentGames = new Map();
+      
+      for (const [userId, session] of this.gamingSessions) {
+        const gameName = session.game;
+        if (!currentGames.has(gameName)) {
+          currentGames.set(gameName, {
+            name: gameName,
+            currentPlayers: 0,
+            playerIds: []
+          });
+        }
+        
+        const gameData = currentGames.get(gameName);
+        gameData.currentPlayers++;
+        gameData.playerIds.push(userId);
+      }
+
+      // Top aktuelle Spiele
+      const liveGames = Array.from(currentGames.values())
+        .sort((a, b) => b.currentPlayers - a.currentPlayers)
+        .slice(0, 10);
+
+      return {
+        totalPlayingNow: this.gamingSessions.size,
+        activeGames: currentGames.size,
+        topLiveGames: liveGames,
+        timestamp: new Date()
+      };
+    } catch (error) {
+      console.error('Error getting live gaming stats:', error);
+      return {
+        totalPlayingNow: 0,
+        activeGames: 0,
+        topLiveGames: [],
+        timestamp: new Date()
+      };
+    }
+  }
+
   getLiveDiscordStats() {
     try {
       if (!this.client.isReady()) {
@@ -288,19 +417,16 @@ class DiscordBot {
           
           totalMembers++;
           
-          // Online-Status aus Cache
           const cachedPresence = this.presenceCache.get(member.user.id);
           if (cachedPresence) {
             onlineMembers++;
             
-            // Prüfe ob gerade spielt
             const isPlaying = cachedPresence.activities.some(activity => 
               activity.type === ActivityType.Playing || activity.type === ActivityType.Streaming
             );
             if (isPlaying) playingMembers++;
           }
           
-          // Voice-Status
           if (member.voice.channel) {
             voiceMembers++;
           }
@@ -326,7 +452,6 @@ class DiscordBot {
     }
   }
 
-  // ✅ NEU: Detaillierte Online-Member Info
   getOnlineMembersDetail() {
     try {
       const onlineMembers = [];
@@ -358,7 +483,6 @@ class DiscordBot {
     }
   }
 
-  // ✅ NEU: Helper - Member anhand User ID finden
   findMemberByUserId(userId) {
     for (const [guildId, guild] of this.client.guilds.cache) {
       const member = guild.members.cache.get(userId);
@@ -367,7 +491,6 @@ class DiscordBot {
     return null;
   }
 
-  // Bestehende Methoden bleiben unverändert...
   async restoreActiveSessions() {
     try {
       console.log('🔄 Restoring active voice sessions...');
@@ -571,11 +694,22 @@ class DiscordBot {
         await this.endVoiceSession(member.user.id, 'server_leave');
       }
 
+      // ✅ ENHANCED: Gaming-Session beim Server verlassen beenden
       if (this.gamingSessions.has(member.user.id)) {
+        const session = this.gamingSessions.get(member.user.id);
+        const duration = Math.floor((new Date() - session.startTime) / 1000 / 60);
+        
+        await GameStats.updateGameStats(
+          session.game, 
+          session.userId, 
+          'GAME_END',
+          duration
+        );
+        
         this.gamingSessions.delete(member.user.id);
+        console.log(`🎮 Ended gaming session for ${member.user.username} (server leave)`);
       }
 
-      // Presence Cache leeren
       this.presenceCache.delete(member.user.id);
 
       await this.logActivity(user._id, 'SERVER_LEAVE', {
@@ -682,14 +816,33 @@ class DiscordBot {
         this.autoSyncScheduler.stop();
       }
 
-      console.log('🔄 Ending all active voice sessions and cleaning up database...');
+      console.log('🔄 Ending all active sessions and cleaning up...');
       
-      const result = await VoiceSession.endAllActiveSessionsAndCleanup('shutdown');
-      console.log(`📊 Cleaned up ${result.count} voice sessions (${result.totalMinutes} minutes)`);
+      // ✅ Voice Sessions beenden
+      const voiceResult = await VoiceSession.endAllActiveSessionsAndCleanup('shutdown');
+      console.log(`📊 Cleaned up ${voiceResult.count} voice sessions (${voiceResult.totalMinutes} minutes)`);
+      
+      // ✅ Gaming Sessions beenden
+      let gamingSessionsEnded = 0;
+      for (const [userId, session] of this.gamingSessions) {
+        try {
+          const duration = Math.floor((new Date() - session.startTime) / 1000 / 60);
+          await GameStats.updateGameStats(
+            session.game, 
+            session.userId, 
+            'GAME_END',
+            duration
+          );
+          gamingSessionsEnded++;
+        } catch (error) {
+          console.error(`Error ending gaming session for ${userId}:`, error);
+        }
+      }
+      console.log(`🎮 Ended ${gamingSessionsEnded} gaming sessions`);
       
       this.voiceSessions.clear();
       this.gamingSessions.clear();
-      this.presenceCache.clear(); // ✅ NEU
+      this.presenceCache.clear();
       
       this.client.destroy();
       console.log('🔴 Discord bot stopped');
