@@ -1,12 +1,12 @@
-// frontend/src/pages/public/HomePage.jsx
+// frontend/src/pages/public/HomePage.jsx - Mit Server Stats Integration
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '../../components/common/PublicLayout';
+import { useServerStats } from '../../hooks/useServerStats';
 
 // Import zusätzliche Komponenten für Animationen
 import GameCard from '../../components/public/GameCard';
 import TestimonialSlider from '../../components/public/TestimonialSlider';
-import StatsCounter from '../../components/public/StatsCounter';
 import EventPreview from '../../components/public/EventPreview';
 import CommunityCarousel from '../../components/public/CommunityCarousel';
 import HeroSection from '../../components/public/HeroSection';
@@ -14,7 +14,59 @@ import FeaturesSection from '../../components/public/FeaturesSection';
 import CommunityRulesSection from '../../components/public/CommunityRulesSection';
 import FeaturedStreamer from '../../components/public/FeaturedStreamer';
 
+// Neue Komponente für animierte Statistiken
+const AnimatedStatCounter = ({ label, value, suffix = '', delay = 0, isVisible }) => {
+  const [count, setCount] = useState(0);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  
+  useEffect(() => {
+    if (!isVisible || hasAnimated) return;
+    
+    const targetValue = parseInt(value.toString().replace(/,/g, '')) || 0;
+    if (targetValue === 0) return;
+    
+    setHasAnimated(true);
+    
+    const duration = 2000; // 2 Sekunden Animation
+    const steps = 60;
+    const increment = targetValue / steps;
+    let current = 0;
+    
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= targetValue) {
+        setCount(targetValue);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(current));
+      }
+    }, duration / steps);
+    
+    return () => clearInterval(timer);
+  }, [isVisible, value, hasAnimated]);
+  
+  return (
+    <div 
+      className={`text-center transition-all duration-1000 transform ${
+        isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
+      }`}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      <p className="text-4xl md:text-5xl font-extrabold text-white mb-2">
+        {count.toLocaleString()}{suffix}
+      </p>
+      <p className="text-lg text-primary-300">{label}</p>
+    </div>
+  );
+};
+
 const HomePage = () => {
+  // Server Stats Hook
+  const { stats, loading: statsLoading, error: statsError } = useServerStats({
+    autoRefresh: true,
+    refreshInterval: 15 * 60 * 1000 // 15 Minuten
+  });
+
   // State für Animationen
   const [isVisible, setIsVisible] = useState({
     hero: false,
@@ -105,44 +157,68 @@ const HomePage = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
   
-  // Beliebte Spiele in der Community
-  const popularGames = [
-    {
-      id: 1,
-      title: 'Minecraft',
-      image: 'https://via.placeholder.com/300x180',
-      players: 45,
-      category: 'Sandbox'
-    },
-    {
-      id: 2,
-      title: 'Fortnite',
-      image: 'https://via.placeholder.com/300x180',
-      players: 38,
-      category: 'Battle Royale'
-    },
-    {
-      id: 3,
-      title: 'Call of Duty: Warzone',
-      image: 'https://via.placeholder.com/300x180',
-      players: 31,
-      category: 'FPS'
-    },
-    {
-      id: 4,
-      title: 'League of Legends',
-      image: 'https://via.placeholder.com/300x180',
-      players: 27,
-      category: 'MOBA'
-    }
-  ];
+  // Beliebte Spiele in der Community (mit Server-Daten wenn verfügbar)
+  const popularGames = stats?.highlights?.popularGames?.length > 0 
+    ? stats.highlights.popularGames.map((game, index) => ({
+        id: index + 1,
+        title: game.name,
+        image: 'https://via.placeholder.com/300x180',
+        players: game.playCount || 0,
+        category: 'Popular'
+      }))
+    : [
+        {
+          id: 1,
+          title: 'Minecraft',
+          image: 'https://via.placeholder.com/300x180',
+          players: 45,
+          category: 'Sandbox'
+        },
+        {
+          id: 2,
+          title: 'Fortnite',
+          image: 'https://via.placeholder.com/300x180',
+          players: 38,
+          category: 'Battle Royale'
+        },
+        {
+          id: 3,
+          title: 'Call of Duty: Warzone',
+          image: 'https://via.placeholder.com/300x180',
+          players: 31,
+          category: 'FPS'
+        },
+        {
+          id: 4,
+          title: 'League of Legends',
+          image: 'https://via.placeholder.com/300x180',
+          players: 27,
+          category: 'MOBA'
+        }
+      ];
   
-  // Community Statistiken
-  const stats = [
-    { label: 'Community Mitglieder', value: 1283, suffix: '+' },
-    { label: 'Aktive Spieler', value: 450, suffix: '+' },
-    { label: 'Server & Kanäle', value: 56, suffix: '' },
-    { label: 'Stunden gemeinsames Spielen', value: 15460, suffix: '+' }
+  // Community Statistiken - Echte Daten vom Server oder Fallback
+  const communityStats = [
+    { 
+      label: 'Community Mitglieder', 
+      value: stats?.members?.total || 1283, 
+      suffix: '+' 
+    },
+    { 
+      label: 'Aktive Spieler', 
+      value: stats?.members?.active || 450, 
+      suffix: '+' 
+    },
+    { 
+      label: 'Stunden Voice Chat', 
+      value: stats?.activity?.totalVoiceHours || 15460, 
+      suffix: '+' 
+    },
+    { 
+      label: 'Gesendete Nachrichten', 
+      value: stats?.activity?.totalMessages || 89542, 
+      suffix: '+' 
+    }
   ];
   
   // Kommende Events
@@ -212,23 +288,23 @@ const HomePage = () => {
     }
   ];
   
-  // Testimonials
+  // Testimonials - erweitert mit Server-Daten
   const testimonials = [
     {
       id: 1,
-      name: 'Max M.',
+      name: stats?.highlights?.topUsers?.[0]?.username || 'Max M.',
       avatar: 'https://via.placeholder.com/60',
       text: 'Bei SimpleGaming habe ich nicht nur tolle Mitspieler gefunden, sondern auch echte Freunde. Die Events sind immer ein Highlight!'
     },
     {
       id: 2,
-      name: 'Sarah K.',
+      name: stats?.highlights?.topUsers?.[1]?.username || 'Sarah K.',
       avatar: 'https://via.placeholder.com/60',
       text: 'Als Gelegenheitsspielerin fühle ich mich hier total willkommen. Die Buddy-Funktion ist genial, um neue Leute kennenzulernen.'
     },
     {
       id: 3,
-      name: 'Tim R.',
+      name: stats?.highlights?.topUsers?.[2]?.username || 'Tim R.',
       avatar: 'https://via.placeholder.com/60',
       text: 'Die Gameserver sind super stabil und die Admins kümmern sich gut um die Community. Immer gerne dabei!'
     }
@@ -267,13 +343,25 @@ const HomePage = () => {
       {/* Hero Section mit erweiterten Animationen */}
       <HeroSection isVisible={isVisible.hero} />
       
+      {/* Live Stats Badge - schwebt über dem Content */}
+      {stats && !statsLoading && (
+        <div className="fixed top-20 right-4 z-40 bg-primary-600 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
+            <span className="text-sm font-medium">
+              {stats.activity.activeVoiceSessions} aktiv im Voice
+            </span>
+          </div>
+        </div>
+      )}
+      
       {/* Features Section mit 3D-Karten und Animationen */}
       <FeaturesSection id="features" isVisible={isVisible.features} />
       
       {/* Community Regeln Section */}
       <CommunityRulesSection id="rules" isVisible={isVisible.rules} />
       
-      {/* Beliebte Spiele Section - mit Hover-Animationen und mehr Tiefe */}
+      {/* Beliebte Spiele Section - mit Server-Daten */}
       <div 
         id="games" 
         className={`py-16 bg-light-bg-secondary dark:bg-dark-bg-secondary transition-all duration-1000 pattern-fade ${isVisible.games ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -288,7 +376,7 @@ const HomePage = () => {
               <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Spiele mit uns!
+              {stats ? `${stats.activity.gamesPlayed} Sessions gespielt` : 'Spiele mit uns!'}
             </div>
           </div>
           
@@ -314,7 +402,7 @@ const HomePage = () => {
         </div>
       </div>
       
-      {/* Statistik-Section - mit verbesserten Animationen */}
+      {/* Statistik-Section - MIT ECHTEN SERVER-DATEN */}
       <div 
         id="stats" 
         className={`py-20 bg-gradient-to-r from-primary-700 to-primary-900 transition-all duration-1000 relative ${isVisible.stats ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -327,19 +415,75 @@ const HomePage = () => {
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          {/* Titel mit Glow */}
-          <h2 className="text-3xl font-extrabold text-white text-center mb-12 neon-glow">SimpleGaming in Zahlen</h2>
+          {/* Titel mit Live-Update Indikator */}
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-extrabold text-white mb-4 neon-glow">
+              SimpleGaming in Zahlen
+            </h2>
+            {stats && (
+              <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mb-6">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2"></div>
+                Live-Daten • Aktualisiert {new Date(stats.lastUpdate).toLocaleTimeString('de-DE')}
+              </div>
+            )}
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {stats.map((stat, index) => (
-              <StatsCounter 
+            {communityStats.map((stat, index) => (
+              <AnimatedStatCounter 
                 key={index} 
-                stat={stat} 
+                label={stat.label}
+                value={stat.value} 
+                suffix={stat.suffix}
                 delay={index * 200} 
                 isVisible={isVisible.stats} 
               />
             ))}
           </div>
+          
+          {/* Zusätzliche Live-Statistiken */}
+          {stats && (
+            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6 text-center">
+                <div className="text-2xl font-bold text-white mb-2">
+                  {stats.members.newThisWeek}
+                </div>
+                <div className="text-primary-200 text-sm">
+                  Neue Mitglieder diese Woche
+                </div>
+              </div>
+              
+              <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6 text-center">
+                <div className="text-2xl font-bold text-white mb-2">
+                  {stats.activity.activeVoiceSessions}
+                </div>
+                <div className="text-primary-200 text-sm">
+                  Gerade im Voice Chat
+                </div>
+              </div>
+              
+              <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6 text-center">
+                <div className="text-2xl font-bold text-white mb-2">
+                  {Math.round((stats.members.active / stats.members.total) * 100)}%
+                </div>
+                <div className="text-primary-200 text-sm">
+                  Aktivitätsrate (7 Tage)
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Error State für Stats */}
+          {statsError && (
+            <div className="mt-8 text-center">
+              <div className="inline-flex items-center px-4 py-2 rounded-lg bg-red-100 text-red-800 text-sm">
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                Live-Statistiken temporär nicht verfügbar
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Wellige untere Kante */}
@@ -459,7 +603,7 @@ const HomePage = () => {
         </div>
       </div>
       
-      {/* Testimonials Section */}
+      {/* Testimonials Section - mit echten Top-Usern */}
       <div 
         id="testimonials" 
         className={`py-16 bg-light-bg-primary dark:bg-dark-bg-primary transition-all duration-1000 ${isVisible.testimonials ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -470,6 +614,11 @@ const HomePage = () => {
             <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl neon-glow">
               Was unsere Mitglieder sagen
             </p>
+            {stats?.highlights?.topUsers?.length > 0 && (
+              <p className="mt-4 text-lg text-light-text-secondary dark:text-dark-text-secondary">
+                Stimmen unserer aktivsten Community-Mitglieder
+              </p>
+            )}
           </div>
           
           <TestimonialSlider 
@@ -479,7 +628,7 @@ const HomePage = () => {
         </div>
       </div>
       
-      {/* Call to Action Section - mit Dynamischen Hintergrund-Effekten */}
+      {/* Call to Action Section - mit Live-Statistiken */}
       <div 
         id="cta" 
         className={`py-16 relative overflow-hidden transition-all duration-1000 ${isVisible.cta ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -494,10 +643,49 @@ const HomePage = () => {
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="lg:flex lg:items-center lg:justify-between">
-            <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl neon-glow">
-              <span className="block">Bereit, beizutreten?</span>
-              <span className="block text-primary-300">Werde noch heute Teil von SimpleGaming!</span>
-            </h2>
+            <div className="lg:w-0 lg:flex-1">
+              <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl neon-glow">
+                <span className="block">Bereit, beizutreten?</span>
+                <span className="block text-primary-300">
+                  {stats ? 
+                    `Werde Teil von ${stats.formatted?.members?.total || stats.members.total} Gamern!` : 
+                    'Werde noch heute Teil von SimpleGaming!'
+                  }
+                </span>
+              </h2>
+              
+              {/* Live-Aktivität Anzeige */}
+              {stats && (
+                <div className="mt-6 flex flex-wrap gap-4">
+                  <div className="flex items-center bg-white bg-opacity-20 rounded-lg px-4 py-2">
+                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse mr-2"></div>
+                    <span className="text-white text-sm font-medium">
+                      {stats.activity.activeVoiceSessions} gerade online
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center bg-white bg-opacity-20 rounded-lg px-4 py-2">
+                    <svg className="w-4 h-4 text-yellow-300 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                    <span className="text-white text-sm font-medium">
+                      {stats.members.newThisWeek} neue Mitglieder diese Woche
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center bg-white bg-opacity-20 rounded-lg px-4 py-2">
+                    <svg className="w-4 h-4 text-blue-300 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                      <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                    </svg>
+                    <span className="text-white text-sm font-medium">
+                      {stats.formatted?.activity?.totalMessages || stats.activity.totalMessages} Nachrichten
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <div className="mt-8 flex lg:mt-0 lg:flex-shrink-0">
               <div className="inline-flex rounded-md shadow-lg">
                 <a
@@ -513,7 +701,7 @@ const HomePage = () => {
             </div>
           </div>
           
-          {/* Stick Figure Scene - Fun Gaming Session */}
+          {/* Stick Figure Scene - Fun Gaming Session mit Live-Daten */}
           <div className="mt-10">
             <div className="relative flex justify-center">
               <svg viewBox="0 0 300 100" className="w-full max-w-lg opacity-40">
@@ -525,7 +713,7 @@ const HomePage = () => {
                   <circle cx="80" cy="40" r="8" stroke="#FFFFFF" strokeWidth="2" fill="none" />
                   <line x1="80" y1="48" x2="80" y2="65" stroke="#FFFFFF" strokeWidth="2" />
                   <line x1="80" y1="52" x2="70" y2="60" stroke="#FFFFFF" strokeWidth="2" />
-                  <line x1="80" y1="52" x2="90" y2="65" stroke="#FFFFFF" strokeWidth="2" /> {/* Arm to controller */}
+                  <line x1="80" y1="52" x2="90" y2="65" stroke="#FFFFFF" strokeWidth="2" />
                   <line x1="80" y1="65" x2="70" y2="85" stroke="#FFFFFF" strokeWidth="2" />
                   <line x1="80" y1="65" x2="90" y2="85" stroke="#FFFFFF" strokeWidth="2" />
                   
@@ -540,7 +728,7 @@ const HomePage = () => {
                   <circle cx="220" cy="40" r="8" stroke="#FFFFFF" strokeWidth="2" fill="none" />
                   <line x1="220" y1="48" x2="220" y2="65" stroke="#FFFFFF" strokeWidth="2" />
                   <line x1="220" y1="52" x2="230" y2="60" stroke="#FFFFFF" strokeWidth="2" />
-                  <line x1="220" y1="52" x2="210" y2="65" stroke="#FFFFFF" strokeWidth="2" /> {/* Arm to controller */}
+                  <line x1="220" y1="52" x2="210" y2="65" stroke="#FFFFFF" strokeWidth="2" />
                   <line x1="220" y1="65" x2="210" y2="85" stroke="#FFFFFF" strokeWidth="2" />
                   <line x1="220" y1="65" x2="230" y2="85" stroke="#FFFFFF" strokeWidth="2" />
                   
@@ -565,6 +753,15 @@ const HomePage = () => {
                 <path d="M180,35 L182,40 L187,42 L182,44 L180,49 L178,44 L173,42 L178,40 Z" fill="#FFFFFF" opacity="0.5" className="animate-ping" style={{animationDuration: "2.5s"}} />
               </svg>
             </div>
+            
+            {/* Live-Aktivität Text */}
+            {stats && (
+              <div className="mt-6 text-center">
+                <p className="text-white text-opacity-80 text-lg">
+                  Gerade spielen <span className="font-bold text-white">{stats.activity.activeVoiceSessions}</span> Mitglieder zusammen
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-// backend/bot/discordBot.js
+// backend/bot/discordBot.js - OPTIMIERT für minimale DB-Größe
 const { Client, GatewayIntentBits, Events, ActivityType } = require('discord.js');
 const User = require('../models/user.model');
 const UserActivity = require('../models/userActivity.model');
@@ -18,96 +18,67 @@ class DiscordBot {
       ]
     });
 
-    this.voiceSessions = new Map(); // In-Memory Cache für Performance
-    this.gamingSessions = new Map(); // Verfolgt Gaming-Sessions
-    this.autoSyncScheduler = null; // Auto-Sync Scheduler
+    // Nur In-Memory Cache für Performance, keine redundante DB-Speicherung
+    this.voiceSessions = new Map(); // discordUserId -> { sessionId, startTime, channelName }
+    this.gamingSessions = new Map(); // discordUserId -> { game, startTime }
+    this.autoSyncScheduler = null;
     
     this.initializeEventListeners();
   }
 
   initializeEventListeners() {
-    // Bot ist bereit
     this.client.once(Events.ClientReady, async () => {
       console.log(`✅ Discord Bot ist online als ${this.client.user.tag}`);
       
-      // Bot Status setzen
       this.client.user.setActivity('SimpleGaming Community', { 
         type: ActivityType.Watching 
       });
 
-      // Aktive Voice-Sessions beim Start wiederherstellen
       await this.restoreActiveSessions();
-
-      // Alle Mitglieder beim Start synchronisieren
       this.syncAllMembers();
-
-      // Auto-Sync Scheduler starten
       this.startAutoSync();
     });
 
-    // Neue Nachrichten verfolgen
     this.client.on(Events.MessageCreate, (message) => {
       this.handleMessage(message);
     });
 
-    // Voice State Changes verfolgen
     this.client.on(Events.VoiceStateUpdate, (oldState, newState) => {
       this.handleVoiceStateUpdate(oldState, newState);
     });
 
-    // Mitglied tritt Server bei
     this.client.on(Events.GuildMemberAdd, (member) => {
       this.handleMemberJoin(member);
     });
 
-    // Mitglied verlässt Server
     this.client.on(Events.GuildMemberRemove, (member) => {
       this.handleMemberLeave(member);
     });
 
-    // Presence Updates (Gaming Activity)
     this.client.on(Events.PresenceUpdate, (oldPresence, newPresence) => {
       this.handlePresenceUpdate(oldPresence, newPresence);
     });
 
-    // Fehlerbehandlung
     this.client.on('error', (error) => {
       console.error('Discord Bot Error:', error);
     });
   }
 
-  // Aktive Voice-Sessions beim Bot-Start wiederherstellen
+  // Aktive Sessions beim Bot-Start wiederherstellen
   async restoreActiveSessions() {
     try {
       console.log('🔄 Restoring active voice sessions...');
       
-      // Alle alten aktiven Sessions beenden (Bot war offline)
-      const result = await VoiceSession.endAllActiveSessions('restart');
-      console.log(`📊 Ended ${result.count} sessions from bot restart (${result.totalMinutes} minutes)`);
-      
-      // User-Stats mit den beendeten Sessions aktualisieren
-      if (result.totalMinutes > 0) {
-        const endedSessions = await VoiceSession.find({ 
-          'metadata.botRestart': true,
-          endTime: { $gte: new Date(Date.now() - 5 * 60 * 1000) } // Letzte 5 Minuten
-        }).populate('userId');
-        
-        for (const session of endedSessions) {
-          if (session.userId && session.duration > 0) {
-            await User.findByIdAndUpdate(session.userId._id, {
-              $inc: { 'stats.voiceMinutes': session.duration }
-            });
-            console.log(`📈 Added ${session.duration} minutes to ${session.userId.username}`);
-          }
-        }
-      }
+      // Alle alten aktiven Sessions beenden und LÖSCHEN
+      const result = await VoiceSession.endAllActiveSessionsAndCleanup('restart');
+      console.log(`📊 Cleaned up ${result.count} sessions from bot restart (${result.totalMinutes} minutes)`);
       
       // Aktuelle Voice-States scannen und neue Sessions starten
       const guilds = this.client.guilds.cache;
       let activeUsers = 0;
       
       for (const [guildId, guild] of guilds) {
-        const voiceChannels = guild.channels.cache.filter(c => c.type === 2); // Voice channels
+        const voiceChannels = guild.channels.cache.filter(c => c.type === 2);
         
         for (const [channelId, channel] of voiceChannels) {
           for (const [memberId, member] of channel.members) {
@@ -121,12 +92,16 @@ class DiscordBot {
       
       console.log(`🎤 Found ${activeUsers} users currently in voice channels`);
       
+      // DB-Größe nach Cleanup loggen
+      const remainingSessions = await VoiceSession.countDocuments();
+      console.log(`📦 Voice sessions in database: ${remainingSessions} (should equal active users)`);
+      
     } catch (error) {
       console.error('❌ Error restoring voice sessions:', error);
     }
   }
 
-  // Voice-Session starten
+  // Voice-Session starten (nur für aktive Sessions)
   async startVoiceSession(discordUserId, channel) {
     try {
       const user = await User.findOne({ discordId: discordUserId });
@@ -140,13 +115,11 @@ class DiscordBot {
       
       if (existingSession) {
         console.log(`⚠️  User ${discordUserId} already has active session, ending old one`);
-        await existingSession.endSession('switch');
-        await User.findByIdAndUpdate(user._id, {
-          $inc: { 'stats.voiceMinutes': existingSession.duration }
-        });
+        await existingSession.endSessionAndDelete('switch');
+        // Session wurde automatisch gelöscht
       }
 
-      // Neue Session erstellen
+      // Neue Session erstellen (wird automatisch als active=true erstellt)
       const session = await VoiceSession.create({
         userId: user._id,
         discordUserId: discordUserId,
@@ -156,7 +129,7 @@ class DiscordBot {
         startTime: new Date()
       });
 
-      // In Memory-Cache speichern für Performance
+      // In Memory-Cache für schnellen Zugriff
       this.voiceSessions.set(discordUserId, {
         sessionId: session._id,
         startTime: session.startTime,
@@ -166,49 +139,42 @@ class DiscordBot {
 
       console.log(`🎤 ${user.username} joined voice: ${channel.name}`);
       
+      // Voice JOIN Activity loggen
+      await this.logActivity(user._id, 'VOICE_JOIN', {
+        channelId: channel.id,
+        channelName: channel.name,
+        guildId: channel.guild.id
+      });
+      
       return session;
     } catch (error) {
       console.error('Error starting voice session:', error);
     }
   }
 
-  // Voice-Session beenden
+  // Voice-Session beenden und LÖSCHEN
   async endVoiceSession(discordUserId, reason = 'left') {
     try {
       const user = await User.findOne({ discordId: discordUserId });
       if (!user) return;
 
-      // Session aus Cache entfernen
+      // Session aus Memory-Cache entfernen
       this.voiceSessions.delete(discordUserId);
 
-      // Aktive Session in DB finden und beenden
+      // Aktive Session finden, Stats aktualisieren und LÖSCHEN
       const session = await VoiceSession.findOne({ 
         discordUserId: discordUserId, 
         isActive: true 
       });
 
       if (session) {
-        const duration = await session.endSession(reason);
+        // endSessionAndDelete aktualisiert automatisch User-Stats und löscht die Session
+        const duration = await session.endSessionAndDelete(reason);
         
-        if (duration > 0) {
-          // User-Stats aktualisieren
-          await User.findByIdAndUpdate(user._id, {
-            $inc: { 'stats.voiceMinutes': duration },
-            $set: { 'stats.lastSeen': new Date() }
-          });
-
-          console.log(`🎤 ${user.username} left voice after ${duration} minutes`);
-          
-          // UserActivity loggen
-          await this.logActivity(user._id, 'VOICE_LEAVE', {
-            channelId: session.channelId,
-            channelName: session.channelName,
-            duration: duration,
-            reason: reason
-          });
-        }
-        
+        console.log(`🎤 ${user.username} left voice after ${duration} minutes (session deleted)`);
         return duration;
+      } else {
+        console.log(`⚠️  No active session found for ${user.username}`);
       }
     } catch (error) {
       console.error('Error ending voice session:', error);
@@ -229,11 +195,9 @@ class DiscordBot {
   }
 
   async handleMessage(message) {
-    // Ignoriere Bot-Nachrichten
     if (message.author.bot) return;
 
     try {
-      // Benutzer in DB finden
       const user = await User.findOne({ discordId: message.author.id });
       if (!user) return;
 
@@ -243,7 +207,7 @@ class DiscordBot {
         'stats.lastSeen': new Date()
       });
 
-      // Detaillierte Aktivität speichern
+      // Detaillierte Aktivität speichern (für Analytics)
       await this.logActivity(user._id, 'MESSAGE', {
         channelId: message.channel.id,
         channelName: message.channel.name,
@@ -251,7 +215,6 @@ class DiscordBot {
         hasAttachments: message.attachments.size > 0
       });
 
-      console.log(`📝 Message logged for ${message.author.username}`);
     } catch (error) {
       console.error('Error handling message:', error);
     }
@@ -265,16 +228,6 @@ class DiscordBot {
       // User betritt Voice Channel
       if (!oldState.channelId && newState.channelId) {
         await this.startVoiceSession(userId, newState.channel);
-        
-        await this.logActivity(
-          (await User.findOne({ discordId: userId }))?._id,
-          'VOICE_JOIN',
-          {
-            channelId: newState.channelId,
-            channelName: newState.channel.name,
-            guildId: newState.guild.id
-          }
-        );
       }
       
       // User verlässt Voice Channel
@@ -284,13 +237,13 @@ class DiscordBot {
       
       // User wechselt Voice Channel
       else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-        // Alte Session beenden
+        // Alte Session beenden und löschen
         await this.endVoiceSession(userId, 'switch');
         
         // Neue Session starten
         await this.startVoiceSession(userId, newState.channel);
         
-        console.log(`🔄 ${newState.member.user.username} switched from ${oldState.channel.name} to ${newState.channel.name}`);
+        console.log(`🔄 ${newPresence.member.user.username} switched from ${oldState.channel.name} to ${newState.channel.name}`);
       }
     } catch (error) {
       console.error('Error handling voice state update:', error);
@@ -312,7 +265,7 @@ class DiscordBot {
         activity.type === ActivityType.Streaming
       );
 
-      // Gaming-Session tracking
+      // Gaming-Session tracking (nur im Memory, keine DB)
       const currentGame = games[0];
       const previousSession = this.gamingSessions.get(userId);
 
@@ -331,7 +284,7 @@ class DiscordBot {
         console.log(`🎮 ${newPresence.member.user.username} started playing ${currentGame.name}`);
       } 
       else if (!currentGame && previousSession) {
-        // Gaming-Session beendet
+        // Gaming-Session beendet - Stats aktualisieren und Memory löschen
         const duration = Math.floor((new Date() - previousSession.startTime) / 1000 / 60);
         
         await User.findByIdAndUpdate(user._id, {
@@ -344,7 +297,7 @@ class DiscordBot {
           duration: duration
         });
 
-        this.gamingSessions.delete(userId);
+        this.gamingSessions.delete(userId); // Memory cleanup
         console.log(`🎮 ${newPresence.member.user.username} stopped playing ${previousSession.game} after ${duration} minutes`);
       }
       else if (currentGame && previousSession && currentGame.name !== previousSession.game) {
@@ -375,11 +328,9 @@ class DiscordBot {
 
   async handleMemberJoin(member) {
     try {
-      // Prüfen ob Benutzer bereits existiert
       let user = await User.findOne({ discordId: member.user.id });
       
       if (!user) {
-        // Neuen Benutzer erstellen
         user = await User.create({
           discordId: member.user.id,
           username: member.user.username,
@@ -394,7 +345,6 @@ class DiscordBot {
         
         console.log(`👋 New member joined: ${member.user.username}`);
       } else {
-        // Benutzer-Info aktualisieren
         await User.findByIdAndUpdate(user._id, {
           username: member.user.username,
           discriminator: member.user.discriminator,
@@ -418,20 +368,13 @@ class DiscordBot {
       const user = await User.findOne({ discordId: member.user.id });
       if (!user) return;
 
-      // Aktive Sessions beenden
+      // Aktive Sessions beenden und löschen
       if (this.voiceSessions.has(member.user.id)) {
-        const session = this.voiceSessions.get(member.user.id);
-        const duration = Math.floor((new Date() - session.startTime) / 1000 / 60);
-        
-        await User.findByIdAndUpdate(user._id, {
-          $inc: { 'stats.voiceMinutes': duration }
-        });
-
-        this.voiceSessions.delete(member.user.id);
+        await this.endVoiceSession(member.user.id, 'server_leave');
       }
 
       if (this.gamingSessions.has(member.user.id)) {
-        this.gamingSessions.delete(member.user.id);
+        this.gamingSessions.delete(member.user.id); // Memory cleanup
       }
 
       await this.logActivity(user._id, 'SERVER_LEAVE', {
@@ -460,7 +403,6 @@ class DiscordBot {
           let user = await User.findOne({ discordId: member.user.id });
           
           if (!user) {
-            // Neuen Benutzer erstellen
             user = await User.create({
               discordId: member.user.id,
               username: member.user.username,
@@ -473,7 +415,6 @@ class DiscordBot {
               }]
             });
           } else {
-            // Benutzer-Info aktualisieren
             await User.findByIdAndUpdate(user._id, {
               username: member.user.username,
               discriminator: member.user.discriminator,
@@ -503,7 +444,6 @@ class DiscordBot {
     }
   }
 
-  // Statistiken für Events
   async trackEventParticipation(discordUserId, eventId, eventName, participationType = 'JOINED') {
     try {
       const user = await User.findOne({ discordId: discordUserId });
@@ -526,7 +466,6 @@ class DiscordBot {
     }
   }
 
-  // Bot starten
   async start() {
     try {
       await this.client.login(process.env.DISCORD_BOT_TOKEN);
@@ -536,36 +475,22 @@ class DiscordBot {
     }
   }
 
-  // Bot stoppen
   async stop() {
     try {
-      // Auto-Sync Scheduler stoppen
       if (this.autoSyncScheduler) {
         this.autoSyncScheduler.stop();
       }
 
-      console.log('🔄 Ending all active voice sessions...');
+      console.log('🔄 Ending all active voice sessions and cleaning up database...');
       
-      // Alle aktiven Voice-Sessions beenden
-      const result = await VoiceSession.endAllActiveSessions('shutdown');
-      console.log(`📊 Ended ${result.count} voice sessions (${result.totalMinutes} minutes)`);
+      // Alle aktiven Voice-Sessions beenden und LÖSCHEN
+      const result = await VoiceSession.endAllActiveSessionsAndCleanup('shutdown');
+      console.log(`📊 Cleaned up ${result.count} voice sessions (${result.totalMinutes} minutes)`);
       
-      // User-Stats mit den beendeten Sessions aktualisieren
-      if (result.totalMinutes > 0) {
-        const endedSessions = await VoiceSession.find({ 
-          'metadata.botRestart': true,
-          endTime: { $gte: new Date(Date.now() - 2 * 60 * 1000) } // Letzte 2 Minuten
-        }).populate('userId');
-        
-        for (const session of endedSessions) {
-          if (session.userId && session.duration > 0) {
-            await User.findByIdAndUpdate(session.userId._id, {
-              $inc: { 'stats.voiceMinutes': session.duration }
-            });
-          }
-        }
-      }
-
+      // Memory caches leeren
+      this.voiceSessions.clear();
+      this.gamingSessions.clear();
+      
       this.client.destroy();
       console.log('🔴 Discord bot stopped');
     } catch (error) {
@@ -573,21 +498,18 @@ class DiscordBot {
     }
   }
 
-  // Voice-Statistiken abrufen
+  // Optimierte Voice-Statistiken (nur aktive Sessions)
   async getVoiceStats() {
     try {
-      const activeSessionsCount = await VoiceSession.countDocuments({ isActive: true });
-      const totalSessions = await VoiceSession.countDocuments({});
-      const totalMinutes = await VoiceSession.aggregate([
-        { $match: { isActive: false } },
-        { $group: { _id: null, total: { $sum: '$duration' } } }
-      ]);
-
+      const stats = await VoiceSession.getCurrentStats();
+      
       return {
-        activeSessions: activeSessionsCount,
-        totalSessions: totalSessions,
-        totalMinutes: totalMinutes[0]?.total || 0,
-        memoryCache: this.voiceSessions.size
+        activeSessionsOnly: true, // Indikator dass nur aktive Sessions getrackt werden
+        activeSessions: stats?.activeSessionsCount || 0,
+        channelDistribution: stats?.channelDistribution || [],
+        memoryCache: this.voiceSessions.size,
+        databaseSize: stats?.activeSessionsCount || 0, // Sollte sehr klein sein
+        note: 'Historical sessions are deleted after stats update to keep database minimal'
       };
     } catch (error) {
       console.error('Error getting voice stats:', error);
@@ -595,7 +517,37 @@ class DiscordBot {
     }
   }
 
-  // Auto-Sync manuell triggern
+  // Manual cleanup für sehr alte Sessions (Maintenance)
+  async performMaintenanceCleanup() {
+    try {
+      console.log('🧹 Performing maintenance cleanup...');
+      
+      // Finde Sessions die älter als 24 Stunden sind (sollte normalerweise keine geben)
+      const oldSessions = await VoiceSession.find({
+        startTime: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      }).populate('userId');
+      
+      if (oldSessions.length > 0) {
+        console.log(`⚠️  Found ${oldSessions.length} sessions older than 24h, cleaning up...`);
+        
+        for (const session of oldSessions) {
+          await session.endSessionAndDelete('maintenance');
+        }
+        
+        console.log(`✅ Maintenance cleanup completed`);
+      } else {
+        console.log(`✅ No old sessions found, database is clean`);
+      }
+      
+      // Log finale DB-Größe
+      const remainingSessions = await VoiceSession.countDocuments();
+      console.log(`📦 Active voice sessions remaining: ${remainingSessions}`);
+      
+    } catch (error) {
+      console.error('Error during maintenance cleanup:', error);
+    }
+  }
+
   async triggerManualSync(type = 'daily') {
     if (this.autoSyncScheduler) {
       return await this.autoSyncScheduler.triggerManualSync(type);
@@ -603,7 +555,6 @@ class DiscordBot {
     return { success: false, message: 'Auto-sync not enabled' };
   }
 
-  // Auto-Sync Status abrufen
   getAutoSyncStatus() {
     if (this.autoSyncScheduler) {
       return this.autoSyncScheduler.getStatus();
