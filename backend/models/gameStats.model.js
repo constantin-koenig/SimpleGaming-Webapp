@@ -1,4 +1,4 @@
-// backend/models/gameStats.model.js - Neues Model für Game-Statistiken
+// backend/models/gameStats.model.js - FIXED: Korrekte Zeitraum-Berechnung
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -31,9 +31,9 @@ const gameStatsSchema = new Schema({
     default: 'Game'
   },
   
-  // Aggregierte Statistiken
+  // ✅ FIXED: Verbesserte Statistiken mit korrekten Zeiträumen
   stats: {
-    // Anzahl einzigartiger Spieler
+    // Anzahl einzigartiger Spieler (gesamt)
     uniquePlayers: { type: Number, default: 0 },
     
     // Gesamte Sessions
@@ -42,18 +42,35 @@ const gameStatsSchema = new Schema({
     // Gesamte Spielzeit in Minuten
     totalMinutes: { type: Number, default: 0 },
     
-    // Durchschnittliche Session-Länge
+    // Durchschnittliche Session-Länge in Minuten
     averageSessionLength: { type: Number, default: 0 },
     
-    // Sessions in verschiedenen Zeiträumen
-    sessionsToday: { type: Number, default: 0 },
-    sessionsThisWeek: { type: Number, default: 0 },
-    sessionsThisMonth: { type: Number, default: 0 },
-    
-    // Spielzeit in verschiedenen Zeiträumen (Minuten)
-    minutesToday: { type: Number, default: 0 },
-    minutesThisWeek: { type: Number, default: 0 },
-    minutesThisMonth: { type: Number, default: 0 }
+    // ✅ ENHANCED: Detaillierte Zeitraum-Statistiken
+    periods: {
+      today: {
+        sessions: { type: Number, default: 0 },
+        minutes: { type: Number, default: 0 },
+        uniquePlayers: [{ type: String }], // Array der User IDs
+        lastReset: { type: Date, default: () => new Date().setHours(0,0,0,0) }
+      },
+      thisWeek: {
+        sessions: { type: Number, default: 0 },
+        minutes: { type: Number, default: 0 },
+        uniquePlayers: [{ type: String }],
+        lastReset: { type: Date, default: () => {
+          const now = new Date();
+          const day = now.getDay();
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Montag als Wochenstart
+          return new Date(now.setDate(diff)).setHours(0,0,0,0);
+        }}
+      },
+      thisMonth: {
+        sessions: { type: Number, default: 0 },
+        minutes: { type: Number, default: 0 },
+        uniquePlayers: [{ type: String }],
+        lastReset: { type: Date, default: () => new Date(new Date().getFullYear(), new Date().getMonth(), 1) }
+      }
+    }
   },
   
   // Aktuelle Aktivität
@@ -61,8 +78,11 @@ const gameStatsSchema = new Schema({
     // Spieler die gerade spielen
     currentPlayers: { type: Number, default: 0 },
     
-    // Liste der aktuell spielenden User IDs
-    activePlayerIds: [{ type: String }],
+    // Liste der aktuell spielenden User IDs mit Startzeit
+    activePlayerIds: [{
+      userId: { type: String, required: true },
+      startTime: { type: Date, default: Date.now }
+    }],
     
     // Letzter Update der aktuellen Aktivität
     lastActivityUpdate: { type: Date, default: Date.now }
@@ -98,20 +118,78 @@ gameStatsSchema.index({ 'stats.uniquePlayers': -1 });
 gameStatsSchema.index({ 'metadata.popularityScore': -1 });
 gameStatsSchema.index({ 'metadata.lastSeen': -1 });
 gameStatsSchema.index({ 'currentActivity.currentPlayers': -1 });
+gameStatsSchema.index({ 'stats.periods.today.sessions': -1 });
+gameStatsSchema.index({ 'stats.periods.thisWeek.sessions': -1 });
 
-// Virtual für Stunden-Berechnung
-gameStatsSchema.virtual('stats.totalHours').get(function() {
-  return Math.floor(this.stats.totalMinutes / 60);
-});
+// ✅ Helper-Methode für Wochenbeginn (statisch gemacht)
+gameStatsSchema.statics.getWeekStart = function() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Montag als Wochenstart
+  return new Date(now.setDate(diff)).setHours(0,0,0,0);
+};
 
-gameStatsSchema.virtual('stats.hoursThisWeek').get(function() {
-  return Math.floor(this.stats.minutesThisWeek / 60);
-});
+// ✅ FIXED: Korrekte Zeitraum-Überprüfung und Reset
+gameStatsSchema.methods.checkAndResetPeriods = async function() {
+  const now = new Date();
+  let needsUpdate = false;
+  
+  // Today Reset (um Mitternacht)
+  const todayStart = new Date().setHours(0,0,0,0);
+  if (this.stats.periods.today.lastReset < todayStart) {
+    this.stats.periods.today = {
+      sessions: 0,
+      minutes: 0,
+      uniquePlayers: [],
+      lastReset: new Date(todayStart)
+    };
+    needsUpdate = true;
+    console.log(`🗓️  Reset daily stats for ${this.gameName}`);
+  }
+  
+  // Week Reset (Montag um Mitternacht)
+  const weekStart = new Date(gameStatsSchema.statics.getWeekStart());
+  if (this.stats.periods.thisWeek.lastReset < weekStart) {
+    this.stats.periods.thisWeek = {
+      sessions: 0,
+      minutes: 0,
+      uniquePlayers: [],
+      lastReset: weekStart
+    };
+    needsUpdate = true;
+    console.log(`🗓️  Reset weekly stats for ${this.gameName}`);
+  }
+  
+  // Month Reset (1. des Monats um Mitternacht)
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (this.stats.periods.thisMonth.lastReset < monthStart) {
+    this.stats.periods.thisMonth = {
+      sessions: 0,
+      minutes: 0,
+      uniquePlayers: [],
+      lastReset: monthStart
+    };
+    needsUpdate = true;
+    console.log(`🗓️  Reset monthly stats for ${this.gameName}`);
+  }
+  
+  if (needsUpdate) {
+    await this.save();
+  }
+  
+  return needsUpdate;
+};
 
-// Statische Methode zum Aktualisieren der Game-Stats
+// ✅ FIXED: Komplett überarbeitete updateGameStats Methode
 gameStatsSchema.statics.updateGameStats = async function(gameName, userId, activityType, duration = 0) {
   try {
     if (!gameName || typeof gameName !== 'string' || gameName.trim().length === 0) {
+      console.warn('Invalid game name provided to updateGameStats');
+      return null;
+    }
+
+    if (!userId || typeof userId !== 'string') {
+      console.warn('Invalid user ID provided to updateGameStats');
       return null;
     }
 
@@ -119,11 +197,7 @@ gameStatsSchema.statics.updateGameStats = async function(gameName, userId, activ
     const normalizedName = this.normalizeGameName(gameName);
     const gameId = this.generateGameId(normalizedName);
     
-    // Zeitstempel für Periode-Berechnungen
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const thisWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const thisMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // Game-Eintrag finden oder erstellen
     let gameStats = await this.findOne({ gameId });
@@ -142,85 +216,36 @@ gameStatsSchema.statics.updateGameStats = async function(gameName, userId, activ
       console.log(`🎮 New game tracked: ${gameName}`);
     }
 
-    // Update-Objekt vorbereiten
-    const updates = {
-      'metadata.lastSeen': now
-    };
+    // Zeitraum-Resets prüfen
+    await gameStats.checkAndResetPeriods();
+
+    console.log(`🎮 Processing ${activityType} for ${gameName} (User: ${userId}, Duration: ${duration}min)`);
 
     // Je nach Activity-Type verschiedene Updates
     switch (activityType) {
       case 'GAME_START':
-        // Spieler zur aktuellen Aktivität hinzufügen
-        if (userId && !gameStats.currentActivity.activePlayerIds.includes(userId)) {
-          updates['$addToSet'] = { 'currentActivity.activePlayerIds': userId };
-          updates['$inc'] = { 
-            'currentActivity.currentPlayers': 1,
-            'stats.totalSessions': 1
-          };
-          
-          // Prüfen ob Spieler heute schon gespielt hat für unique player count
-          const UserActivity = require('./userActivity.model');
-          const todayActivity = await UserActivity.findOne({
-            userId: mongoose.Types.ObjectId(userId),
-            activityType: 'GAME_START',
-            'metadata.gameName': gameName,
-            timestamp: { $gte: today }
-          });
-          
-          if (!todayActivity) {
-            updates['$inc']['stats.uniquePlayers'] = 1;
-          }
-        }
+        await this.handleGameStart(gameStats, userId, now);
         break;
 
       case 'GAME_END':
       case 'GAME_SWITCH':
-        // Spieler aus aktueller Aktivität entfernen
-        if (userId) {
-          updates['$pull'] = { 'currentActivity.activePlayerIds': userId };
-          updates['$inc'] = { 
-            'currentActivity.currentPlayers': -1,
-            'stats.totalMinutes': duration || 0
-          };
-          
-          // Session-Länge aktualisieren
-          if (duration > 0) {
-            const newTotalSessions = gameStats.stats.totalSessions;
-            const newTotalMinutes = gameStats.stats.totalMinutes + duration;
-            updates['stats.averageSessionLength'] = Math.floor(newTotalMinutes / Math.max(newTotalSessions, 1));
-            
-            // Zeitraum-spezifische Updates
-            updates['$inc']['stats.minutesToday'] = duration;
-            updates['$inc']['stats.minutesThisWeek'] = duration;
-            updates['$inc']['stats.minutesThisMonth'] = duration;
-          }
-        }
+        await this.handleGameEnd(gameStats, userId, duration, now);
         break;
+
+      default:
+        console.warn(`Unknown activity type: ${activityType}`);
+        return gameStats;
     }
 
-    // Current Players kann nicht unter 0 fallen
-    if (updates['$inc'] && updates['$inc']['currentActivity.currentPlayers'] < 0) {
-      const currentPlayers = Math.max(0, gameStats.currentActivity.currentPlayers - 1);
-      updates['currentActivity.currentPlayers'] = currentPlayers;
-      delete updates['$inc']['currentActivity.currentPlayers'];
-    }
+    // Popularity Score neu berechnen
+    gameStats.metadata.popularityScore = this.calculatePopularityScore(gameStats);
+    gameStats.metadata.lastSeen = now;
+    gameStats.currentActivity.lastActivityUpdate = now;
 
-    // Popularity Score berechnen (Kombination aus Sessions, Spielern und Aktualität)
-    const sessionsWeight = gameStats.stats.totalSessions * 2;
-    const playersWeight = gameStats.stats.uniquePlayers * 5;
-    const recentWeight = (now - gameStats.metadata.lastSeen) < (7 * 24 * 60 * 60 * 1000) ? 10 : 0;
-    const currentWeight = gameStats.currentActivity.currentPlayers * 20;
+    await gameStats.save();
     
-    updates['metadata.popularityScore'] = sessionsWeight + playersWeight + recentWeight + currentWeight;
-    updates['currentActivity.lastActivityUpdate'] = now;
-
-    // Update ausführen
-    gameStats = await this.findOneAndUpdate(
-      { gameId },
-      updates,
-      { new: true, upsert: false }
-    );
-
+    console.log(`✅ Updated game stats for ${gameName}: ${gameStats.stats.totalSessions} sessions, ${Math.floor(gameStats.stats.totalMinutes/60)}h total`);
+    
     return gameStats;
   } catch (error) {
     console.error('Error updating game stats:', error);
@@ -228,40 +253,155 @@ gameStatsSchema.statics.updateGameStats = async function(gameName, userId, activ
   }
 };
 
-// Statische Methode für Top-Games
+// ✅ FIXED: Game Start Handler
+gameStatsSchema.statics.handleGameStart = async function(gameStats, userId, now) {
+  // Prüfen ob User bereits spielt (Duplikat-Sessions vermeiden)
+  const isAlreadyPlaying = gameStats.currentActivity.activePlayerIds.some(
+    player => player.userId === userId
+  );
+  
+  if (isAlreadyPlaying) {
+    console.log(`⚠️  User ${userId} is already playing ${gameStats.gameName}`);
+    return;
+  }
+
+  // User zur aktuellen Aktivität hinzufügen
+  gameStats.currentActivity.activePlayerIds.push({
+    userId: userId,
+    startTime: now
+  });
+  gameStats.currentActivity.currentPlayers = gameStats.currentActivity.activePlayerIds.length;
+
+  // Session-Zähler erhöhen
+  gameStats.stats.totalSessions += 1;
+  gameStats.stats.periods.today.sessions += 1;
+  gameStats.stats.periods.thisWeek.sessions += 1;
+  gameStats.stats.periods.thisMonth.sessions += 1;
+
+  // Unique Players für Zeiträume tracken
+  if (!gameStats.stats.periods.today.uniquePlayers.includes(userId)) {
+    gameStats.stats.periods.today.uniquePlayers.push(userId);
+  }
+  if (!gameStats.stats.periods.thisWeek.uniquePlayers.includes(userId)) {
+    gameStats.stats.periods.thisWeek.uniquePlayers.push(userId);
+  }
+  if (!gameStats.stats.periods.thisMonth.uniquePlayers.includes(userId)) {
+    gameStats.stats.periods.thisMonth.uniquePlayers.push(userId);
+  }
+
+  // Gesamt-Unique-Players aktualisieren (vereinfacht)
+  gameStats.stats.uniquePlayers = Math.max(
+    gameStats.stats.uniquePlayers,
+    gameStats.stats.periods.thisMonth.uniquePlayers.length
+  );
+
+  console.log(`▶️  ${userId} started playing ${gameStats.gameName} (${gameStats.currentActivity.currentPlayers} now playing)`);
+};
+
+// ✅ FIXED: Game End Handler mit korrekter Spielzeit-Berechnung
+gameStatsSchema.statics.handleGameEnd = async function(gameStats, userId, duration, now) {
+  // User aus aktueller Aktivität entfernen
+  const playerIndex = gameStats.currentActivity.activePlayerIds.findIndex(
+    player => player.userId === userId
+  );
+  
+  if (playerIndex === -1) {
+    console.warn(`⚠️  User ${userId} was not playing ${gameStats.gameName}`);
+    return;
+  }
+
+  const playerSession = gameStats.currentActivity.activePlayerIds[playerIndex];
+  gameStats.currentActivity.activePlayerIds.splice(playerIndex, 1);
+  gameStats.currentActivity.currentPlayers = gameStats.currentActivity.activePlayerIds.length;
+
+  // ✅ FIXED: Spielzeit korrekt berechnen
+  let sessionDuration = duration;
+  
+  // Falls keine Duration übergeben wurde, aus Startzeit berechnen
+  if (!sessionDuration || sessionDuration <= 0) {
+    sessionDuration = Math.floor((now - playerSession.startTime) / 1000 / 60);
+  }
+  
+  // Mindestdauer: 1 Minute, Maximaldauer: 8 Stunden (480 min)
+  sessionDuration = Math.max(1, Math.min(sessionDuration, 480));
+
+  console.log(`⏹️  ${userId} stopped playing ${gameStats.gameName} after ${sessionDuration} minutes`);
+
+  // ✅ Spielzeit zu allen Zeiträumen hinzufügen
+  gameStats.stats.totalMinutes += sessionDuration;
+  gameStats.stats.periods.today.minutes += sessionDuration;
+  gameStats.stats.periods.thisWeek.minutes += sessionDuration;
+  gameStats.stats.periods.thisMonth.minutes += sessionDuration;
+
+  // ✅ Durchschnittliche Session-Länge neu berechnen
+  if (gameStats.stats.totalSessions > 0) {
+    gameStats.stats.averageSessionLength = Math.floor(
+      gameStats.stats.totalMinutes / gameStats.stats.totalSessions
+    );
+  }
+
+  console.log(`📊 Total game time for ${gameStats.gameName}: ${Math.floor(gameStats.stats.totalMinutes/60)}h ${gameStats.stats.totalMinutes%60}m`);
+};
+
+// ✅ ENHANCED: Popularity Score Berechnung
+gameStatsSchema.statics.calculatePopularityScore = function(gameStats) {
+  const now = new Date();
+  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  // Gewichtung verschiedener Faktoren
+  const sessionsWeight = gameStats.stats.totalSessions * 2;
+  const playersWeight = gameStats.stats.uniquePlayers * 5;
+  const hoursWeight = Math.floor(gameStats.stats.totalMinutes / 60) * 1;
+  const recentWeight = (gameStats.metadata.lastSeen > oneWeekAgo) ? 20 : 0;
+  const currentWeight = gameStats.currentActivity.currentPlayers * 50;
+  const weeklyActivityWeight = gameStats.stats.periods.thisWeek.sessions * 3;
+  
+  return Math.floor(
+    sessionsWeight + 
+    playersWeight + 
+    hoursWeight + 
+    recentWeight + 
+    currentWeight +
+    weeklyActivityWeight
+  );
+};
+
+// ✅ ENHANCED: Verbesserte Top-Games Methode
 gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit = 10) {
   try {
     let sortField = 'metadata.popularityScore';
     let matchFilter = {};
 
-    // Mindest-Aktivität Filter
-    const minSessions = timeframe === 'all' ? 1 : 2;
-    matchFilter['stats.totalSessions'] = { $gte: minSessions };
-
-    // Zeitraum-spezifische Sortierung
+    // Mindest-Aktivität Filter je nach Zeitraum
     switch (timeframe) {
       case 'today':
-        sortField = 'stats.sessionsToday';
+        sortField = 'stats.periods.today.sessions';
+        matchFilter['stats.periods.today.sessions'] = { $gte: 1 };
         break;
       case 'week':
-        sortField = 'stats.sessionsThisWeek';
+        sortField = 'stats.periods.thisWeek.sessions';
+        matchFilter['stats.periods.thisWeek.sessions'] = { $gte: 1 };
         break;
       case 'month':
-        sortField = 'stats.sessionsThisMonth';
-        break;
-      case 'popular':
-        sortField = 'metadata.popularityScore';
+        sortField = 'stats.periods.thisMonth.sessions';
+        matchFilter['stats.periods.thisMonth.sessions'] = { $gte: 1 };
         break;
       case 'active':
         sortField = 'currentActivity.currentPlayers';
+        matchFilter['currentActivity.currentPlayers'] = { $gt: 0 };
+        break;
+      case 'popular':
+        sortField = 'metadata.popularityScore';
+        matchFilter['stats.totalSessions'] = { $gte: 3 };
         break;
       default:
         sortField = 'stats.totalSessions';
+        matchFilter['stats.totalSessions'] = { $gte: 1 };
     }
 
     const pipeline = [
       { $match: matchFilter },
-      { $sort: { [sortField]: -1, 'stats.totalSessions': -1 } },
+      { $sort: { [sortField]: -1, 'stats.totalSessions': -1, 'metadata.lastSeen': -1 } },
       { $limit: parseInt(limit) },
       {
         $project: {
@@ -271,9 +411,11 @@ gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit =
           stats: 1,
           currentActivity: 1,
           metadata: 1,
-          // Berechnete Felder
+          // ✅ Korrekte Stunden-Berechnungen
           totalHours: { $floor: { $divide: ['$stats.totalMinutes', 60] } },
-          hoursThisWeek: { $floor: { $divide: ['$stats.minutesThisWeek', 60] } },
+          hoursToday: { $floor: { $divide: ['$stats.periods.today.minutes', 60] } },
+          hoursThisWeek: { $floor: { $divide: ['$stats.periods.thisWeek.minutes', 60] } },
+          hoursThisMonth: { $floor: { $divide: ['$stats.periods.thisMonth.minutes', 60] } },
           isCurrentlyActive: { $gt: ['$currentActivity.currentPlayers', 0] }
         }
       }
@@ -288,13 +430,19 @@ gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit =
       players: game.stats.uniquePlayers,
       sessions: game.stats.totalSessions,
       totalHours: game.totalHours,
+      hoursToday: game.hoursToday,
       hoursThisWeek: game.hoursThisWeek,
+      hoursThisMonth: game.hoursThisMonth,
       currentPlayers: game.currentActivity.currentPlayers,
       isActive: game.isCurrentlyActive,
       popularityScore: game.metadata.popularityScore,
       lastSeen: game.metadata.lastSeen,
       averageSessionLength: game.stats.averageSessionLength,
-      image: game.metadata.imageUrl || 'https://via.placeholder.com/300x180'
+      image: game.metadata.imageUrl || 'https://via.placeholder.com/300x180',
+      // ✅ Zeitraum-spezifische Sessions
+      sessionsToday: game.stats.periods.today.sessions,
+      sessionsThisWeek: game.stats.periods.thisWeek.sessions,
+      sessionsThisMonth: game.stats.periods.thisMonth.sessions
     }));
   } catch (error) {
     console.error('Error getting top games:', error);
@@ -302,43 +450,94 @@ gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit =
   }
 };
 
-// Statische Methode zum Bereinigen alter Daten
-gameStatsSchema.statics.cleanupOldData = async function() {
+// ✅ ENHANCED: Cleanup mit korrekter Zeitraum-Behandlung
+gameStatsSchema.statics.performDailyReset = async function() {
   try {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    console.log('🗓️  Performing daily reset of game stats...');
     
-    // Games die länger als 30 Tage inaktiv sind und wenig Sessions haben
-    const inactiveGames = await this.find({
-      'metadata.lastSeen': { $lt: thirtyDaysAgo },
-      'stats.totalSessions': { $lt: 5 }
-    });
-
-    if (inactiveGames.length > 0) {
-      console.log(`🧹 Cleaning up ${inactiveGames.length} inactive games`);
-      await this.deleteMany({
-        _id: { $in: inactiveGames.map(g => g._id) }
-      });
-    }
-
-    // Zeitraum-spezifische Stats zurücksetzen (täglich)
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    await this.updateMany(
-      {},
-      {
-        $set: {
-          'stats.sessionsToday': 0,
-          'stats.minutesToday': 0
-        }
+    const now = new Date();
+    const todayStart = new Date().setHours(0,0,0,0);
+    const weekStart = new Date(gameStatsSchema.statics.getWeekStart());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // Alle Games für Reset finden
+    const allGames = await this.find({});
+    let resetCount = 0;
+    
+    for (const game of allGames) {
+      let needsUpdate = false;
+      
+      // Today Reset
+      if (game.stats.periods.today.lastReset < todayStart) {
+        game.stats.periods.today = {
+          sessions: 0,
+          minutes: 0,
+          uniquePlayers: [],
+          lastReset: new Date(todayStart)
+        };
+        needsUpdate = true;
       }
-    );
-
-    console.log('✅ Game stats cleanup completed');
+      
+      // Week Reset (falls nötig)
+      if (game.stats.periods.thisWeek.lastReset < weekStart) {
+        game.stats.periods.thisWeek = {
+          sessions: 0,
+          minutes: 0,
+          uniquePlayers: [],
+          lastReset: weekStart
+        };
+        needsUpdate = true;
+      }
+      
+      // Month Reset (falls nötig)
+      if (game.stats.periods.thisMonth.lastReset < monthStart) {
+        game.stats.periods.thisMonth = {
+          sessions: 0,
+          minutes: 0,
+          uniquePlayers: [],
+          lastReset: monthStart
+        };
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
+        await game.save();
+        resetCount++;
+      }
+    }
+    
+    console.log(`✅ Daily reset completed: ${resetCount} games reset`);
+    return resetCount;
   } catch (error) {
-    console.error('Error cleaning up game stats:', error);
+    console.error('Error performing daily reset:', error);
+    return 0;
   }
 };
 
-// Helper-Methoden
+// Statische Methode zum Bereinigen alter Daten
+gameStatsSchema.statics.cleanupOldData = async function() {
+  try {
+    console.log('🧹 Cleaning up old game data...');
+    
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    
+    // Games die länger als 30 Tage inaktiv sind und sehr wenig Sessions haben
+    const result = await this.deleteMany({
+      'metadata.lastSeen': { $lt: thirtyDaysAgo },
+      'stats.totalSessions': { $lt: 3 },
+      'currentActivity.currentPlayers': 0
+    });
+
+    console.log(`🗑️  Cleaned up ${result.deletedCount} inactive games`);
+    
+    return result.deletedCount;
+  } catch (error) {
+    console.error('Error cleaning up game stats:', error);
+    return 0;
+  }
+};
+
+// Helper-Methoden (unverändert aber optimiert)
 gameStatsSchema.statics.normalizeGameName = function(gameName) {
   return gameName
     .trim()

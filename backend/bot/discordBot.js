@@ -1,9 +1,9 @@
-// backend/bot/discordBot.js - UPDATED mit GameStats Integration
+// backend/bot/discordBot.js - FIXED: Korrekte GameStats Integration
 const { Client, GatewayIntentBits, Events, ActivityType } = require('discord.js');
 const User = require('../models/user.model');
 const UserActivity = require('../models/userActivity.model');
 const VoiceSession = require('../models/voiceSession.model');
-const GameStats = require('../models/gameStats.model'); // ✅ NEU
+const GameStats = require('../models/gameStats.model');
 const AutoSyncScheduler = require('./autoSync');
 
 class DiscordBot {
@@ -19,13 +19,41 @@ class DiscordBot {
       ]
     });
 
-    // Memory cache für Performance
+    // ✅ ENHANCED: Bessere Memory-Verwaltung für Gaming-Sessions
     this.voiceSessions = new Map();
-    this.gamingSessions = new Map(); // ✅ ENHANCED: Detaillierteres Gaming-Tracking
+    this.gamingSessions = new Map(); // userId -> { game, startTime, userId, sessionId }
     this.presenceCache = new Map();
     this.autoSyncScheduler = null;
     
+    // ✅ Performance-Counter
+    this.stats = {
+      gamingSessionsStarted: 0,
+      gamingSessionsEnded: 0,
+      totalGamingMinutes: 0,
+      presenceUpdates: 0
+    };
+    
     this.initializeEventListeners();
+    this.startDailyResetScheduler();
+  }
+
+  // ✅ NEW: Daily Reset Scheduler für GameStats
+  startDailyResetScheduler() {
+    // Jeden Tag um 00:01 Uhr
+    const scheduleDaily = require('node-cron');
+    scheduleDaily.schedule('1 0 * * *', async () => {
+      try {
+        console.log('🗓️  Starting daily game stats reset...');
+        const resetCount = await GameStats.performDailyReset();
+        console.log(`✅ Daily reset completed: ${resetCount} games processed`);
+      } catch (error) {
+        console.error('❌ Error in daily reset:', error);
+      }
+    }, {
+      timezone: 'Europe/Berlin'
+    });
+    
+    console.log('⏰ Daily reset scheduler initialized');
   }
 
   initializeEventListeners() {
@@ -39,7 +67,7 @@ class DiscordBot {
       await this.restoreActiveSessions();
       await this.syncAllMembers();
       await this.initializePresenceCache();
-      await this.initializeGameStats(); // ✅ NEU
+      await this.initializeGameStats();
       this.startAutoSync();
       
       console.log('🔐 Bot Intents aktiv:', this.getActiveIntents());
@@ -70,55 +98,73 @@ class DiscordBot {
     });
   }
 
-  // ✅ NEU: Game Stats beim Bot-Start initialisieren
+  // ✅ ENHANCED: Verbesserte Game Stats Initialisierung
   async initializeGameStats() {
     try {
       console.log('🎮 Initializing game stats from current presences...');
       
-      let totalGames = 0;
+      let totalPresences = 0;
+      let gamingPresences = 0;
       let trackedGames = 0;
       
       for (const [guildId, guild] of this.client.guilds.cache) {
+        console.log(`🔍 Scanning presences in guild: ${guild.name}`);
+        
         const members = await guild.members.fetch();
         
         for (const [memberId, member] of members) {
           if (member.user.bot) continue;
           
+          totalPresences++;
           const presence = member.presence;
+          
           if (presence && presence.activities) {
             const games = presence.activities.filter(activity => 
               activity.type === ActivityType.Playing || 
               activity.type === ActivityType.Streaming
             );
             
-            for (const game of games) {
-              totalGames++;
+            if (games.length > 0) {
+              gamingPresences++;
               
-              // User aus DB holen
-              const user = await User.findOne({ discordId: member.user.id });
-              if (user) {
-                // Game Stats aktualisieren
-                await GameStats.updateGameStats(
-                  game.name, 
-                  user._id.toString(), 
-                  'GAME_START'
-                );
-                
-                // Memory Session erstellen
-                this.gamingSessions.set(member.user.id, {
-                  game: game.name,
-                  startTime: new Date(),
-                  userId: user._id.toString()
-                });
-                
-                trackedGames++;
+              for (const game of games) {
+                try {
+                  // User aus DB holen
+                  const user = await User.findOne({ discordId: member.user.id });
+                  if (user) {
+                    // ✅ FIXED: Korrekte GameStats Initialisierung
+                    await GameStats.updateGameStats(
+                      game.name, 
+                      user._id.toString(), 
+                      'GAME_START'
+                    );
+                    
+                    // Memory Session erstellen
+                    this.gamingSessions.set(member.user.id, {
+                      game: game.name,
+                      startTime: new Date(),
+                      userId: user._id.toString(),
+                      sessionId: `init_${Date.now()}_${member.user.id}`
+                    });
+                    
+                    trackedGames++;
+                    console.log(`🎮 Initialized: ${user.username} playing ${game.name}`);
+                  } else {
+                    console.warn(`⚠️  User ${member.user.username} not found in database`);
+                  }
+                } catch (gameError) {
+                  console.error(`❌ Error initializing game for ${member.user.username}:`, gameError.message);
+                }
               }
             }
           }
         }
       }
       
-      console.log(`✅ Game stats initialized: ${trackedGames}/${totalGames} games tracked`);
+      console.log(`✅ Game stats initialized:`);
+      console.log(`   📊 Total presences scanned: ${totalPresences}`);
+      console.log(`   🎮 Gaming presences found: ${gamingPresences}`);
+      console.log(`   ✅ Games tracked: ${trackedGames}`);
       
       // Cleanup-Task starten
       setInterval(async () => {
@@ -218,7 +264,7 @@ class DiscordBot {
     return intents;
   }
 
-  // ✅ ENHANCED: Verbessertes Presence Update Handling mit GameStats
+  // ✅ COMPLETELY REWRITTEN: Presence Update Handler mit korrekter GameStats Integration
   async handlePresenceUpdate(oldPresence, newPresence) {
     if (!newPresence || !newPresence.member || newPresence.member.user.bot) return;
 
@@ -226,11 +272,13 @@ class DiscordBot {
     const username = newPresence.member.user.username;
     
     try {
+      this.stats.presenceUpdates++;
+      
       const oldStatus = oldPresence?.status || 'offline';
       const newStatus = newPresence.status || 'offline';
       
-      // Status-Change loggen
-      if (oldStatus !== newStatus) {
+      // Status-Change loggen (nur bei größeren Änderungen)
+      if (oldStatus !== newStatus && ['online', 'offline'].includes(newStatus)) {
         console.log(`👤 ${username}: ${oldStatus} → ${newStatus}`);
       }
       
@@ -242,6 +290,7 @@ class DiscordBot {
           lastSeen: new Date()
         });
         
+        // User lastSeen aktualisieren
         await User.findOneAndUpdate(
           { discordId: userId },
           { 'stats.lastSeen': new Date() }
@@ -250,109 +299,186 @@ class DiscordBot {
         this.presenceCache.delete(userId);
       }
 
-      // ✅ ENHANCED: Gaming-Session tracking mit GameStats
+      // ✅ FIXED: Gaming-Session tracking mit korrekter GameStats Integration
       const user = await User.findOne({ discordId: userId });
-      if (!user) return;
+      if (!user) {
+        console.warn(`⚠️  User ${username} not found in database`);
+        return;
+      }
 
-      const activities = newPresence.activities || [];
-      const games = activities.filter(activity => 
-        activity.type === ActivityType.Playing || 
-        activity.type === ActivityType.Streaming
-      );
-
-      const currentGame = games[0];
+      // Alte und neue Gaming-Aktivitäten extrahieren
+      const oldGames = this.extractGamingActivities(oldPresence?.activities || []);
+      const newGames = this.extractGamingActivities(newPresence.activities || []);
+      
       const previousSession = this.gamingSessions.get(userId);
+      const currentGame = newGames[0]; // Erstes Spiel falls mehrere
 
+      // ✅ SCENARIO 1: Neues Spiel gestartet (kein vorheriges Spiel)
       if (currentGame && !previousSession) {
-        // ✅ Neues Spiel gestartet
-        this.gamingSessions.set(userId, {
-          game: currentGame.name,
-          startTime: new Date(),
-          userId: user._id.toString()
-        });
-
-        // GameStats aktualisieren
-        await GameStats.updateGameStats(
-          currentGame.name, 
-          user._id.toString(), 
-          'GAME_START'
-        );
-
-        await this.logActivity(user._id, 'GAME_START', {
-          gameName: currentGame.name,
-          gameType: currentGame.type
-        });
-
-        console.log(`🎮 ${username} started playing ${currentGame.name}`);
+        await this.startGamingSession(user, currentGame, userId, username);
       } 
+      // ✅ SCENARIO 2: Spiel beendet (hatte Spiel, jetzt keins)
       else if (!currentGame && previousSession) {
-        // ✅ Spiel beendet
-        const duration = Math.floor((new Date() - previousSession.startTime) / 1000 / 60);
-        
-        await User.findByIdAndUpdate(user._id, {
-          $inc: { 'stats.gamesPlayed': 1 },
-          'stats.lastSeen': new Date()
-        });
-
-        // GameStats aktualisieren
-        await GameStats.updateGameStats(
-          previousSession.game, 
-          user._id.toString(), 
-          'GAME_END',
-          duration
-        );
-
-        await this.logActivity(user._id, 'GAME_END', {
-          gameName: previousSession.game,
-          duration: duration
-        });
-
-        this.gamingSessions.delete(userId);
-        console.log(`🎮 ${username} stopped playing ${previousSession.game} after ${duration} minutes`);
+        await this.endGamingSession(user, previousSession, userId, username);
       }
+      // ✅ SCENARIO 3: Spiel gewechselt (anderes Spiel)
       else if (currentGame && previousSession && currentGame.name !== previousSession.game) {
-        // ✅ Spiel gewechselt
-        const duration = Math.floor((new Date() - previousSession.startTime) / 1000 / 60);
-        
-        await User.findByIdAndUpdate(user._id, {
-          $inc: { 'stats.gamesPlayed': 1 }
-        });
-
-        // Altes Spiel beenden
-        await GameStats.updateGameStats(
-          previousSession.game, 
-          user._id.toString(), 
-          'GAME_SWITCH',
-          duration
-        );
-
-        // Neues Spiel starten
-        await GameStats.updateGameStats(
-          currentGame.name, 
-          user._id.toString(), 
-          'GAME_START'
-        );
-
-        await this.logActivity(user._id, 'GAME_SWITCH', {
-          fromGame: previousSession.game,
-          toGame: currentGame.name,
-          duration: duration
-        });
-
-        this.gamingSessions.set(userId, {
-          game: currentGame.name,
-          startTime: new Date(),
-          userId: user._id.toString()
-        });
-
-        console.log(`🎮 ${username} switched from ${previousSession.game} to ${currentGame.name}`);
+        await this.switchGamingSession(user, previousSession, currentGame, userId, username);
       }
+      // ✅ SCENARIO 4: Gleiches Spiel weiterhin gespielt (keine Aktion nötig)
+      else if (currentGame && previousSession && currentGame.name === previousSession.game) {
+        // Spiel läuft weiter - keine Aktion nötig
+        // console.log(`🎮 ${username} continues playing ${currentGame.name}`);
+      }
+
     } catch (error) {
-      console.error('Error handling presence update:', error);
+      console.error(`❌ Error handling presence update for ${username}:`, error);
     }
   }
 
-  // ✅ NEU: Live Gaming-Stats abrufen
+  // ✅ NEW: Gaming-Aktivitäten aus Activities extrahieren
+  extractGamingActivities(activities) {
+    return activities.filter(activity => 
+      activity.type === ActivityType.Playing || 
+      activity.type === ActivityType.Streaming
+    );
+  }
+
+  // ✅ NEW: Gaming-Session starten
+  async startGamingSession(user, game, userId, username) {
+    try {
+      const sessionId = `session_${Date.now()}_${userId}`;
+      const startTime = new Date();
+      
+      // Memory Session erstellen
+      this.gamingSessions.set(userId, {
+        game: game.name,
+        startTime: startTime,
+        userId: user._id.toString(),
+        sessionId: sessionId
+      });
+
+      // ✅ GameStats aktualisieren
+      await GameStats.updateGameStats(
+        game.name, 
+        user._id.toString(), 
+        'GAME_START'
+      );
+
+      // UserActivity loggen
+      await this.logActivity(user._id, 'GAME_START', {
+        gameName: game.name,
+        gameType: game.type,
+        sessionId: sessionId
+      });
+
+      this.stats.gamingSessionsStarted++;
+      console.log(`🎮 ${username} started playing ${game.name} (Session: ${this.gamingSessions.size})`);
+      
+    } catch (error) {
+      console.error(`❌ Error starting gaming session for ${username}:`, error);
+    }
+  }
+
+  // ✅ NEW: Gaming-Session beenden
+  async endGamingSession(user, previousSession, userId, username) {
+    try {
+      const endTime = new Date();
+      const duration = Math.floor((endTime - previousSession.startTime) / 1000 / 60); // Minuten
+      
+      // User-Statistiken aktualisieren
+      if (duration > 0) {
+        await User.findByIdAndUpdate(user._id, {
+          $inc: { 'stats.gamesPlayed': 1 },
+          $set: { 'stats.lastSeen': endTime }
+        });
+      }
+
+      // ✅ GameStats aktualisieren mit korrekter Duration
+      await GameStats.updateGameStats(
+        previousSession.game, 
+        user._id.toString(), 
+        'GAME_END',
+        duration
+      );
+
+      // UserActivity loggen
+      await this.logActivity(user._id, 'GAME_END', {
+        gameName: previousSession.game,
+        duration: duration,
+        sessionId: previousSession.sessionId
+      });
+
+      // Memory Session entfernen
+      this.gamingSessions.delete(userId);
+      
+      this.stats.gamingSessionsEnded++;
+      this.stats.totalGamingMinutes += duration;
+      
+      console.log(`🎮 ${username} stopped playing ${previousSession.game} after ${duration} minutes (Sessions: ${this.gamingSessions.size})`);
+      
+    } catch (error) {
+      console.error(`❌ Error ending gaming session for ${username}:`, error);
+    }
+  }
+
+  // ✅ NEW: Gaming-Session wechseln
+  async switchGamingSession(user, previousSession, newGame, userId, username) {
+    try {
+      const switchTime = new Date();
+      const duration = Math.floor((switchTime - previousSession.startTime) / 1000 / 60); // Minuten
+      
+      // Altes Spiel beenden
+      if (duration > 0) {
+        await User.findByIdAndUpdate(user._id, {
+          $inc: { 'stats.gamesPlayed': 1 }
+        });
+      }
+
+      // ✅ Altes Spiel in GameStats beenden
+      await GameStats.updateGameStats(
+        previousSession.game, 
+        user._id.toString(), 
+        'GAME_SWITCH',
+        duration
+      );
+
+      // UserActivity für Switch loggen
+      await this.logActivity(user._id, 'GAME_SWITCH', {
+        fromGame: previousSession.game,
+        toGame: newGame.name,
+        duration: duration,
+        oldSessionId: previousSession.sessionId
+      });
+
+      // ✅ Neues Spiel in GameStats starten
+      const newSessionId = `session_${Date.now()}_${userId}`;
+      await GameStats.updateGameStats(
+        newGame.name, 
+        user._id.toString(), 
+        'GAME_START'
+      );
+
+      // Memory Session aktualisieren
+      this.gamingSessions.set(userId, {
+        game: newGame.name,
+        startTime: switchTime,
+        userId: user._id.toString(),
+        sessionId: newSessionId
+      });
+
+      this.stats.gamingSessionsEnded++;
+      this.stats.gamingSessionsStarted++;
+      this.stats.totalGamingMinutes += duration;
+
+      console.log(`🎮 ${username} switched from ${previousSession.game} to ${newGame.name} (${duration}min played)`);
+      
+    } catch (error) {
+      console.error(`❌ Error switching gaming session for ${username}:`, error);
+    }
+  }
+
+  // ✅ ENHANCED: Live Gaming-Stats mit korrekten Daten
   async getLiveGamingStats() {
     try {
       // Aktuelle Spieler aus Memory
@@ -364,25 +490,40 @@ class DiscordBot {
           currentGames.set(gameName, {
             name: gameName,
             currentPlayers: 0,
-            playerIds: []
+            playerIds: [],
+            totalDuration: 0
           });
         }
         
         const gameData = currentGames.get(gameName);
         gameData.currentPlayers++;
         gameData.playerIds.push(userId);
+        
+        // Session-Dauer berechnen
+        const sessionDuration = Math.floor((Date.now() - session.startTime.getTime()) / 1000 / 60);
+        gameData.totalDuration += sessionDuration;
       }
 
       // Top aktuelle Spiele
       const liveGames = Array.from(currentGames.values())
         .sort((a, b) => b.currentPlayers - a.currentPlayers)
-        .slice(0, 10);
+        .slice(0, 10)
+        .map(game => ({
+          ...game,
+          averageDuration: game.currentPlayers > 0 ? Math.floor(game.totalDuration / game.currentPlayers) : 0
+        }));
 
       return {
         totalPlayingNow: this.gamingSessions.size,
         activeGames: currentGames.size,
         topLiveGames: liveGames,
-        timestamp: new Date()
+        timestamp: new Date(),
+        performance: {
+          sessionsStarted: this.stats.gamingSessionsStarted,
+          sessionsEnded: this.stats.gamingSessionsEnded,
+          totalMinutes: this.stats.totalGamingMinutes,
+          presenceUpdates: this.stats.presenceUpdates
+        }
       };
     } catch (error) {
       console.error('Error getting live gaming stats:', error);
@@ -390,7 +531,8 @@ class DiscordBot {
         totalPlayingNow: 0,
         activeGames: 0,
         topLiveGames: [],
-        timestamp: new Date()
+        timestamp: new Date(),
+        error: error.message
       };
     }
   }
@@ -437,7 +579,7 @@ class DiscordBot {
         available: true,
         totalMembers,
         onlineMembers,
-        playingMembers,
+        playingMembers: this.gamingSessions.size, // ✅ Korrekte Zahl aus Memory
         voiceMembers,
         cacheSize: this.presenceCache.size,
         timestamp: new Date(),
@@ -463,6 +605,9 @@ class DiscordBot {
             activity.type === ActivityType.Playing || activity.type === ActivityType.Streaming
           );
           
+          // Gaming Session Info aus Memory
+          const gamingSession = this.gamingSessions.get(userId);
+          
           onlineMembers.push({
             id: userId,
             username: member.user.username,
@@ -471,7 +616,13 @@ class DiscordBot {
             gameType: currentGame?.type || null,
             inVoice: !!member.voice.channel,
             voiceChannel: member.voice.channel?.name || null,
-            lastSeen: presence.lastSeen
+            lastSeen: presence.lastSeen,
+            // ✅ Gaming Session Details
+            gamingSession: gamingSession ? {
+              game: gamingSession.game,
+              duration: Math.floor((Date.now() - gamingSession.startTime.getTime()) / 1000 / 60),
+              startTime: gamingSession.startTime
+            } : null
           });
         }
       }
@@ -491,12 +642,13 @@ class DiscordBot {
     return null;
   }
 
+  // ✅ ENHANCED: Alle aktiven Sessions beim Bot-Stopp korrekt beenden
   async restoreActiveSessions() {
     try {
       console.log('🔄 Restoring active voice sessions...');
       
       const result = await VoiceSession.endAllActiveSessionsAndCleanup('restart');
-      console.log(`📊 Cleaned up ${result.count} sessions from bot restart (${result.totalMinutes} minutes)`);
+      console.log(`📊 Cleaned up ${result.count} voice sessions from bot restart (${result.totalMinutes} minutes)`);
       
       const guilds = this.client.guilds.cache;
       let activeUsers = 0;
@@ -690,6 +842,7 @@ class DiscordBot {
       const user = await User.findOne({ discordId: member.user.id });
       if (!user) return;
 
+      // Voice Session beenden falls aktiv
       if (this.voiceSessions.has(member.user.id)) {
         await this.endVoiceSession(member.user.id, 'server_leave');
       }
@@ -697,17 +850,7 @@ class DiscordBot {
       // ✅ ENHANCED: Gaming-Session beim Server verlassen beenden
       if (this.gamingSessions.has(member.user.id)) {
         const session = this.gamingSessions.get(member.user.id);
-        const duration = Math.floor((new Date() - session.startTime) / 1000 / 60);
-        
-        await GameStats.updateGameStats(
-          session.game, 
-          session.userId, 
-          'GAME_END',
-          duration
-        );
-        
-        this.gamingSessions.delete(member.user.id);
-        console.log(`🎮 Ended gaming session for ${member.user.username} (server leave)`);
+        await this.endGamingSession(user, session, member.user.id, member.user.username);
       }
 
       this.presenceCache.delete(member.user.id);
@@ -768,6 +911,7 @@ class DiscordBot {
 
   async logActivity(userId, activityType, metadata = {}) {
     try {
+      // ✅ FIXED: Nur UserActivity verwenden, nicht GamingActivity
       await UserActivity.create({
         userId: userId,
         activityType: activityType,
@@ -826,14 +970,11 @@ class DiscordBot {
       let gamingSessionsEnded = 0;
       for (const [userId, session] of this.gamingSessions) {
         try {
-          const duration = Math.floor((new Date() - session.startTime) / 1000 / 60);
-          await GameStats.updateGameStats(
-            session.game, 
-            session.userId, 
-            'GAME_END',
-            duration
-          );
-          gamingSessionsEnded++;
+          const user = await User.findOne({ discordId: userId });
+          if (user) {
+            await this.endGamingSession(user, session, userId, user.username);
+            gamingSessionsEnded++;
+          }
         } catch (error) {
           console.error(`Error ending gaming session for ${userId}:`, error);
         }
@@ -843,6 +984,13 @@ class DiscordBot {
       this.voiceSessions.clear();
       this.gamingSessions.clear();
       this.presenceCache.clear();
+      
+      // Final Stats
+      console.log(`📊 Bot Statistics:`);
+      console.log(`   🎮 Gaming sessions started: ${this.stats.gamingSessionsStarted}`);
+      console.log(`   🎮 Gaming sessions ended: ${this.stats.gamingSessionsEnded}`);
+      console.log(`   ⏱️  Total gaming minutes: ${this.stats.totalGamingMinutes}`);
+      console.log(`   📡 Presence updates: ${this.stats.presenceUpdates}`);
       
       this.client.destroy();
       console.log('🔴 Discord bot stopped');
@@ -869,28 +1017,112 @@ class DiscordBot {
     }
   }
 
+  // ✅ NEW: Gaming Stats für Admin-Interface
+  async getGamingStats() {
+    try {
+      const [currentlyPlaying, topGames, sessionStats] = await Promise.all([
+        GameStats.getTopGames('active', 10),
+        GameStats.getTopGames('week', 10),
+        GameStats.aggregate([
+          {
+            $group: {
+              _id: null,
+              totalGames: { $sum: 1 },
+              totalSessions: { $sum: '$stats.totalSessions' },
+              totalMinutes: { $sum: '$stats.totalMinutes' },
+              activeGames: {
+                $sum: {
+                  $cond: [{ $gt: ['$currentActivity.currentPlayers', 0] }, 1, 0]
+                }
+              }
+            }
+          }
+        ])
+      ]);
+
+      const stats = sessionStats[0] || {};
+
+      return {
+        // Live-Daten aus Memory
+        memoryStats: {
+          activeSessionsCount: this.gamingSessions.size,
+          activePlayers: Array.from(this.gamingSessions.keys()),
+          currentGames: Array.from(new Set(Array.from(this.gamingSessions.values()).map(s => s.game)))
+        },
+        
+        // Datenbank-Statistiken
+        databaseStats: {
+          totalGames: stats.totalGames || 0,
+          totalSessions: stats.totalSessions || 0,
+          totalHours: Math.floor((stats.totalMinutes || 0) / 60),
+          activeGames: stats.activeGames || 0
+        },
+        
+        // Top-Listen
+        currentlyPlaying: currentlyPlaying,
+        topGamesThisWeek: topGames,
+        
+        // Performance
+        performance: {
+          sessionsStarted: this.stats.gamingSessionsStarted,
+          sessionsEnded: this.stats.gamingSessionsEnded,
+          totalMinutesTracked: this.stats.totalGamingMinutes,
+          presenceUpdatesProcessed: this.stats.presenceUpdates
+        },
+        
+        timestamp: new Date()
+      };
+    } catch (error) {
+      console.error('Error getting gaming stats:', error);
+      return {
+        error: error.message,
+        memoryStats: { activeSessionsCount: 0 },
+        databaseStats: { totalGames: 0 }
+      };
+    }
+  }
+
   async performMaintenanceCleanup() {
     try {
       console.log('🧹 Performing maintenance cleanup...');
       
-      const oldSessions = await VoiceSession.find({
+      // Voice Sessions Cleanup
+      const oldVoiceSessions = await VoiceSession.find({
         startTime: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
       }).populate('userId');
       
-      if (oldSessions.length > 0) {
-        console.log(`⚠️  Found ${oldSessions.length} sessions older than 24h, cleaning up...`);
+      if (oldVoiceSessions.length > 0) {
+        console.log(`⚠️  Found ${oldVoiceSessions.length} voice sessions older than 24h, cleaning up...`);
         
-        for (const session of oldSessions) {
+        for (const session of oldVoiceSessions) {
           await session.endSessionAndDelete('maintenance');
         }
         
-        console.log(`✅ Maintenance cleanup completed`);
-      } else {
-        console.log(`✅ No old sessions found, database is clean`);
+        console.log(`✅ Voice maintenance cleanup completed`);
+      }
+
+      // ✅ Gaming Stats Cleanup
+      const cleanedGames = await GameStats.cleanupOldData();
+      console.log(`🎮 Cleaned up ${cleanedGames} old games`);
+
+      // ✅ Memory Consistency Check
+      let memoryInconsistencies = 0;
+      for (const [userId, session] of this.gamingSessions) {
+        const user = await User.findOne({ discordId: userId });
+        if (!user) {
+          console.warn(`⚠️  Gaming session for unknown user ${userId}, removing from memory`);
+          this.gamingSessions.delete(userId);
+          memoryInconsistencies++;
+        }
+      }
+
+      if (memoryInconsistencies > 0) {
+        console.log(`🔧 Fixed ${memoryInconsistencies} memory inconsistencies`);
       }
       
-      const remainingSessions = await VoiceSession.countDocuments();
-      console.log(`📦 Active voice sessions remaining: ${remainingSessions}`);
+      const remainingVoiceSessions = await VoiceSession.countDocuments();
+      console.log(`📦 Active voice sessions remaining: ${remainingVoiceSessions}`);
+      console.log(`🎮 Active gaming sessions in memory: ${this.gamingSessions.size}`);
       
     } catch (error) {
       console.error('Error during maintenance cleanup:', error);
@@ -909,6 +1141,44 @@ class DiscordBot {
       return this.autoSyncScheduler.getStatus();
     }
     return { enabled: false };
+  }
+
+  // ✅ NEW: Detaillierte Bot-Statistiken
+  getBotStats() {
+    return {
+      // Discord-Verbindung
+      connection: {
+        ready: this.client.isReady(),
+        guilds: this.client.guilds?.cache?.size || 0,
+        uptime: this.client.uptime ? Math.floor(this.client.uptime / 1000 / 60) : 0,
+        ping: this.client.ws?.ping || -1
+      },
+      
+      // Memory-Status
+      memory: {
+        voiceSessions: this.voiceSessions.size,
+        gamingSessions: this.gamingSessions.size,
+        presenceCache: this.presenceCache.size
+      },
+      
+      // Performance-Counter
+      performance: {
+        gamingSessionsStarted: this.stats.gamingSessionsStarted,
+        gamingSessionsEnded: this.stats.gamingSessionsEnded,
+        totalGamingMinutes: this.stats.totalGamingMinutes,
+        presenceUpdates: this.stats.presenceUpdates
+      },
+      
+      // Aktueller Status
+      current: {
+        onlineMembers: this.presenceCache.size,
+        playingMembers: this.gamingSessions.size,
+        voiceMembers: this.voiceSessions.size,
+        activeGames: new Set(Array.from(this.gamingSessions.values()).map(s => s.game)).size
+      },
+      
+      timestamp: new Date()
+    };
   }
 }
 
