@@ -1,10 +1,10 @@
-// frontend/src/pages/public/HomePage.jsx - Mit Server Stats Integration
+// frontend/src/pages/public/HomePage.jsx - ENHANCED mit Live-Daten
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '../../components/common/PublicLayout';
-import { useServerStats } from '../../hooks/useServerStats';
+import { useServerStats, useLiveStats, useAnimatedCounter } from '../../hooks/useServerStats';
 
-// Import zusätzliche Komponenten für Animationen
+// Import existing components
 import GameCard from '../../components/public/GameCard';
 import TestimonialSlider from '../../components/public/TestimonialSlider';
 import EventPreview from '../../components/public/EventPreview';
@@ -14,66 +14,226 @@ import FeaturesSection from '../../components/public/FeaturesSection';
 import CommunityRulesSection from '../../components/public/CommunityRulesSection';
 import FeaturedStreamer from '../../components/public/FeaturedStreamer';
 
-// Neue Komponente für animierte Statistiken
-const AnimatedStatCounter = ({ label, value, suffix = '', delay = 0, isVisible }) => {
-  const [count, setCount] = useState(0);
-  const [hasAnimated, setHasAnimated] = useState(false);
-  
-  useEffect(() => {
-    if (!isVisible || hasAnimated) return;
-    
-    const targetValue = parseInt(value.toString().replace(/,/g, '')) || 0;
-    if (targetValue === 0) return;
-    
-    setHasAnimated(true);
-    
-    const duration = 2000; // 2 Sekunden Animation
-    const steps = 60;
-    const increment = targetValue / steps;
-    let current = 0;
-    
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= targetValue) {
-        setCount(targetValue);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(current));
-      }
-    }, duration / steps);
-    
-    return () => clearInterval(timer);
-  }, [isVisible, value, hasAnimated]);
+// NEUE Live-Stats Komponente
+const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
+  const onlineCount = useAnimatedCounter(liveStats.onlineMembers, 1500, isVisible);
+  const voiceCount = useAnimatedCounter(liveStats.activeVoiceSessions, 1500, isVisible);
+  const playingCount = useAnimatedCounter(liveStats.currentlyPlaying, 1500, isVisible);
+
+  return (
+    <div className={`transform transition-all duration-1000 ${
+      isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
+    }`}>
+      {/* Live-Status Header */}
+      <div className="flex items-center justify-center mb-8 space-x-4">
+        <div className="flex items-center px-4 py-2 bg-green-100 dark:bg-green-900 rounded-full">
+          <div className={`w-3 h-3 rounded-full mr-2 ${
+            liveStats.connectionInfo.color === 'green' ? 'bg-green-500 animate-pulse' :
+            liveStats.connectionInfo.color === 'yellow' ? 'bg-yellow-500 animate-spin' :
+            liveStats.connectionInfo.color === 'orange' ? 'bg-orange-500 animate-pulse' :
+            'bg-red-500'
+          }`}></div>
+          <span className="text-sm font-medium text-green-800 dark:text-green-200">
+            {liveStats.connectionInfo.text}
+          </span>
+        </div>
+        
+        {liveStats.timestamp && (
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Aktualisiert: {liveStats.timestamp.toLocaleTimeString('de-DE')}
+          </div>
+        )}
+      </div>
+
+      {/* Live-Statistiken Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Online Mitglieder */}
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-100 text-sm font-medium">Gerade Online</p>
+                <p className="text-3xl font-bold">
+                  {onlineCount.formatted}
+                  {onlineCount.isAnimating && (
+                    <span className="inline-block w-1 h-8 bg-white ml-1 animate-pulse"></span>
+                  )}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center">
+              <div className="w-2 h-2 bg-green-300 rounded-full animate-ping mr-2"></div>
+              <span className="text-green-100 text-xs">Live Discord Präsenz</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Voice Chat */}
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-100 text-sm font-medium">Im Voice Chat</p>
+                <p className="text-3xl font-bold">
+                  {voiceCount.formatted}
+                  {voiceCount.isAnimating && (
+                    <span className="inline-block w-1 h-8 bg-white ml-1 animate-pulse"></span>
+                  )}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd"/>
+                </svg>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center">
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-pulse mr-2"></div>
+              <span className="text-blue-100 text-xs">Aktive Gespräche</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Aktuell Spielend */}
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-purple-100 text-sm font-medium">Spielen gerade</p>
+                <p className="text-3xl font-bold">
+                  {playingCount.formatted}
+                  {playingCount.isAnimating && (
+                    <span className="inline-block w-1 h-8 bg-white ml-1 animate-pulse"></span>
+                  )}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"/>
+                </svg>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center">
+              <div className="w-2 h-2 bg-purple-300 rounded-full animate-bounce mr-2"></div>
+              <span className="text-purple-100 text-xs">Gaming Sessions</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Performance Info (nur für Debug/Admins) */}
+      {liveStats.performance && process.env.NODE_ENV === 'development' && (
+        <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+          Cache-Alter: {liveStats.cacheAge}min | 
+          Update: {liveStats.performance.updateInProgress ? 'Läuft...' : 'Bereit'}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Animierte Statistik-Karte Komponente
+const AnimatedStatCard = ({ label, value, suffix = '', delay = 0, isVisible, gradient, icon }) => {
+  const animatedValue = useAnimatedCounter(
+    parseInt(value.toString().replace(/,/g, '')) || 0, 
+    2000, 
+    isVisible
+  );
   
   return (
     <div 
-      className={`text-center transition-all duration-1000 transform ${
+      className={`transform transition-all duration-1000 ${
         isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
       }`}
       style={{ transitionDelay: `${delay}ms` }}
     >
-      <p className="text-4xl md:text-5xl font-extrabold text-white mb-2">
-        {count.toLocaleString()}{suffix}
-      </p>
-      <p className="text-lg text-primary-300">{label}</p>
+      <div className={`${gradient} rounded-xl p-6 text-white relative overflow-hidden shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300`}>
+        <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full"></div>
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+              {icon}
+            </div>
+            {animatedValue.isAnimating && (
+              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            )}
+          </div>
+          
+          <p className="text-4xl md:text-5xl font-extrabold mb-2">
+            {animatedValue.formatted}{suffix}
+            {animatedValue.isAnimating && (
+              <span className="inline-block w-1 h-10 bg-white ml-2 animate-pulse"></span>
+            )}
+          </p>
+          <p className="text-lg opacity-90">{label}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Floating Live Badge Komponente
+const FloatingLiveBadge = ({ liveStats }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!liveStats.isOnline) return null;
+
+  return (
+    <div 
+      className="fixed top-20 right-4 z-50 transition-all duration-300"
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+    >
+      <div className={`bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg shadow-lg transition-all duration-300 ${
+        isExpanded ? 'px-6 py-4' : 'px-4 py-2'
+      }`}>
+        <div className="flex items-center space-x-2">
+          <div className="w-2 h-2 bg-green-300 rounded-full animate-ping"></div>
+          <div className="text-sm font-medium">
+            {isExpanded ? (
+              <div className="space-y-1">
+                <div>{liveStats.formattedData.onlineMembers} online</div>
+                <div>{liveStats.formattedData.activeVoiceSessions} im Voice</div>
+                <div>{liveStats.formattedData.currentlyPlaying} spielen</div>
+              </div>
+            ) : (
+              <div>{liveStats.formattedData.onlineMembers} online</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
 const HomePage = () => {
-  // Server Stats Hook
+  // Stats Hooks - kombiniert normale und Live-Daten
   const { stats, loading: statsLoading, error: statsError } = useServerStats({
     autoRefresh: true,
-    refreshInterval: 15 * 60 * 1000 // 15 Minuten
+    refreshInterval: 5 * 60 * 1000 // 5 Minuten für normale Stats
   });
 
-  // State für Animationen
+  const liveStats = useLiveStats({
+    refreshInterval: 15000, // 15 Sekunden für Live-Daten
+    autoRefresh: true
+  });
+
+  // Animation States
   const [isVisible, setIsVisible] = useState({
     hero: false,
     features: false,
     rules: false,
     games: false,
     stats: false,
+    liveStats: false,
     events: false,
     community: false,
     testimonials: false,
@@ -81,85 +241,75 @@ const HomePage = () => {
     cta: false
   });
   
-  // Discord Auth URL
   const discordAuthUrl = 'http://localhost:5000/api/auth/discord';
   
-  // Animationen beim Scrollen triggern
+  // Scroll-basierte Animationen
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY + window.innerHeight;
       
-      // Hero Section (sofort sichtbar)
       setIsVisible(prev => ({ ...prev, hero: true }));
       
-      // Features Section
-      const featuresSection = document.getElementById('features');
-      if (featuresSection && scrollPosition > featuresSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, features: true }));
-      }
+      const sections = ['features', 'rules', 'games', 'stats', 'liveStats', 'events', 'community', 'streamers', 'testimonials', 'cta'];
       
-      // Rules Section
-      const rulesSection = document.getElementById('rules');
-      if (rulesSection && scrollPosition > rulesSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, rules: true }));
-      }
-      
-      // Games Section
-      const gamesSection = document.getElementById('games');
-      if (gamesSection && scrollPosition > gamesSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, games: true }));
-      }
-      
-      // Stats Section
-      const statsSection = document.getElementById('stats');
-      if (statsSection && scrollPosition > statsSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, stats: true }));
-      }
-      
-      // Events Section
-      const eventsSection = document.getElementById('events');
-      if (eventsSection && scrollPosition > eventsSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, events: true }));
-      }
-      
-      // Community Section
-      const communitySection = document.getElementById('community');
-      if (communitySection && scrollPosition > communitySection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, community: true }));
-      }
-      
-      // Streamers Section
-      const streamersSection = document.getElementById('streamers');
-      if (streamersSection && scrollPosition > streamersSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, streamers: true }));
-      }
-      
-      // Testimonials Section
-      const testimonialsSection = document.getElementById('testimonials');
-      if (testimonialsSection && scrollPosition > testimonialsSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, testimonials: true }));
-      }
-      
-      // CTA Section
-      const ctaSection = document.getElementById('cta');
-      if (ctaSection && scrollPosition > ctaSection.offsetTop + 100) {
-        setIsVisible(prev => ({ ...prev, cta: true }));
-      }
+      sections.forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (section && scrollPosition > section.offsetTop + 100) {
+          setIsVisible(prev => ({ ...prev, [sectionId]: true }));
+        }
+      });
     };
     
-    // Initial check
     handleScroll();
-    
-    // Event Listener hinzufügen
     window.addEventListener('scroll', handleScroll);
-    
-    // Event Listener entfernen
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
   
-  // Beliebte Spiele in der Community (mit Server-Daten wenn verfügbar)
-  const popularGames = stats?.highlights?.popularGames?.length > 0 
-    ? stats.highlights.popularGames.map((game, index) => ({
+  // Enhanced stats mit Live-Daten
+  const enhancedStats = stats ? {
+    ...stats,
+    live: {
+      onlineMembers: liveStats.onlineMembers,
+      activeVoiceSessions: liveStats.activeVoiceSessions,
+      currentlyPlaying: liveStats.currentlyPlaying
+    }
+  } : null;
+
+  // Community Statistiken mit animierten Werten
+  const communityStats = [
+    { 
+      label: 'Community Mitglieder', 
+      value: enhancedStats?.members?.total || 1283, 
+      suffix: '+',
+      gradient: 'bg-gradient-to-br from-blue-500 to-blue-600',
+      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/></svg>
+    },
+    { 
+      label: 'Aktive Spieler', 
+      value: enhancedStats?.members?.active || 450, 
+      suffix: '+',
+      gradient: 'bg-gradient-to-br from-green-500 to-green-600',
+      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    },
+    { 
+      label: 'Stunden Voice Chat', 
+      value: enhancedStats?.activity?.totalVoiceHours || 15460, 
+      suffix: '+',
+      gradient: 'bg-gradient-to-br from-purple-500 to-purple-600',
+      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd"/></svg>
+    },
+    { 
+      label: 'Gesendete Nachrichten', 
+      value: enhancedStats?.activity?.totalMessages || 89542, 
+      suffix: '+',
+      gradient: 'bg-gradient-to-br from-orange-500 to-orange-600',
+      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"/></svg>
+    }
+  ];
+
+  // Beliebte Spiele mit Fallback-Daten
+  const popularGames = enhancedStats?.highlights?.popularGames?.length > 0 
+    ? enhancedStats.highlights.popularGames.map((game, index) => ({
         id: index + 1,
         title: game.name,
         image: 'https://via.placeholder.com/300x180',
@@ -196,31 +346,7 @@ const HomePage = () => {
           category: 'MOBA'
         }
       ];
-  
-  // Community Statistiken - Echte Daten vom Server oder Fallback
-  const communityStats = [
-    { 
-      label: 'Community Mitglieder', 
-      value: stats?.members?.total || 1283, 
-      suffix: '+' 
-    },
-    { 
-      label: 'Aktive Spieler', 
-      value: stats?.members?.active || 450, 
-      suffix: '+' 
-    },
-    { 
-      label: 'Stunden Voice Chat', 
-      value: stats?.activity?.totalVoiceHours || 15460, 
-      suffix: '+' 
-    },
-    { 
-      label: 'Gesendete Nachrichten', 
-      value: stats?.activity?.totalMessages || 89542, 
-      suffix: '+' 
-    }
-  ];
-  
+
   // Kommende Events
   const upcomingEvents = [
     {
@@ -248,8 +374,8 @@ const HomePage = () => {
       maxParticipants: 40
     }
   ];
-  
-  // Community Inhalte für Karussell
+
+  // Community Inhalte
   const communityItems = [
     {
       id: 1,
@@ -287,24 +413,24 @@ const HomePage = () => {
       type: 'Screenshot'
     }
   ];
-  
-  // Testimonials - erweitert mit Server-Daten
+
+  // Testimonials mit echten Top-Usern
   const testimonials = [
     {
       id: 1,
-      name: stats?.highlights?.topUsers?.[0]?.username || 'Max M.',
+      name: enhancedStats?.highlights?.topUsers?.[0]?.username || 'Max M.',
       avatar: 'https://via.placeholder.com/60',
       text: 'Bei SimpleGaming habe ich nicht nur tolle Mitspieler gefunden, sondern auch echte Freunde. Die Events sind immer ein Highlight!'
     },
     {
       id: 2,
-      name: stats?.highlights?.topUsers?.[1]?.username || 'Sarah K.',
+      name: enhancedStats?.highlights?.topUsers?.[1]?.username || 'Sarah K.',
       avatar: 'https://via.placeholder.com/60',
       text: 'Als Gelegenheitsspielerin fühle ich mich hier total willkommen. Die Buddy-Funktion ist genial, um neue Leute kennenzulernen.'
     },
     {
       id: 3,
-      name: stats?.highlights?.topUsers?.[2]?.username || 'Tim R.',
+      name: enhancedStats?.highlights?.topUsers?.[2]?.username || 'Tim R.',
       avatar: 'https://via.placeholder.com/60',
       text: 'Die Gameserver sind super stabil und die Admins kümmern sich gut um die Community. Immer gerne dabei!'
     }
@@ -340,28 +466,19 @@ const HomePage = () => {
   
   return (
     <PublicLayout>
-      {/* Hero Section mit erweiterten Animationen */}
+      {/* Hero Section */}
       <HeroSection isVisible={isVisible.hero} />
       
-      {/* Live Stats Badge - schwebt über dem Content */}
-      {stats && !statsLoading && (
-        <div className="fixed top-20 right-4 z-40 bg-primary-600 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
-            <span className="text-sm font-medium">
-              {stats.activity.activeVoiceSessions} aktiv im Voice
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Floating Live Badge */}
+      <FloatingLiveBadge liveStats={liveStats} />
       
-      {/* Features Section mit 3D-Karten und Animationen */}
+      {/* Features Section */}
       <FeaturesSection id="features" isVisible={isVisible.features} />
       
       {/* Community Regeln Section */}
       <CommunityRulesSection id="rules" isVisible={isVisible.rules} />
       
-      {/* Beliebte Spiele Section - mit Server-Daten */}
+      {/* Beliebte Spiele Section */}
       <div 
         id="games" 
         className={`py-16 bg-light-bg-secondary dark:bg-dark-bg-secondary transition-all duration-1000 pattern-fade ${isVisible.games ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -376,7 +493,7 @@ const HomePage = () => {
               <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              {stats ? `${stats.activity.gamesPlayed} Sessions gespielt` : 'Spiele mit uns!'}
+              {enhancedStats ? `${enhancedStats.activity.gamesPlayed} Sessions gespielt` : 'Spiele mit uns!'}
             </div>
           </div>
           
@@ -390,90 +507,74 @@ const HomePage = () => {
               />
             ))}
           </div>
-          
-          <div className="mt-12 text-center">
-            <button className="group inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg transition transform hover:-translate-y-1 pulse-animation">
-              <span>Alle Spiele entdecken</span>
-              <svg className="ml-2 -mr-1 h-5 w-5 transform transition-transform group-hover:translate-x-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </button>
+        </div>
+      </div>
+
+      {/* NEUE Live-Stats Section */}
+      <div 
+        id="liveStats" 
+        className={`py-16 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 transition-all duration-1000 ${isVisible.liveStats ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="lg:text-center mb-12">
+            <h2 className="text-base text-primary-600 dark:text-primary-400 font-semibold tracking-wide uppercase gradient-text">Live Stats</h2>
+            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl neon-glow">
+              Was passiert gerade?
+            </p>
+            <p className="mt-4 max-w-2xl text-xl text-light-text-secondary dark:text-dark-text-secondary lg:mx-auto">
+              Echte Live-Daten aus unserer Discord-Community
+            </p>
           </div>
+          
+          <LiveStatsDisplay 
+            liveStats={liveStats} 
+            baseStats={enhancedStats} 
+            isVisible={isVisible.liveStats} 
+          />
         </div>
       </div>
       
-      {/* Statistik-Section - MIT ECHTEN SERVER-DATEN */}
+      {/* Erweiterte Statistik-Section */}
       <div 
         id="stats" 
         className={`py-20 bg-gradient-to-r from-primary-700 to-primary-900 transition-all duration-1000 relative ${isVisible.stats ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
       >
         {/* Wellige obere Kante */}
         <div className="absolute left-0 right-0 -mt-20 h-20 overflow-hidden">
-          <svg className="absolute bottom-0 w-full h-20 fill-current text-light-bg-secondary dark:text-dark-bg-secondary transform rotate-180" viewBox="0 0 1440 320">
+          <svg className="absolute bottom-0 w-full h-20 fill-current text-gray-50 dark:text-gray-900 transform rotate-180" viewBox="0 0 1440 320">
             <path d="M0,64L48,80C96,96,192,128,288,128C384,128,480,96,576,90.7C672,85,768,107,864,122.7C960,139,1056,149,1152,144C1248,139,1344,117,1392,106.7L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
           </svg>
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          {/* Titel mit Live-Update Indikator */}
           <div className="text-center mb-12">
             <h2 className="text-3xl font-extrabold text-white mb-4 neon-glow">
               SimpleGaming in Zahlen
             </h2>
-            {stats && (
+            {enhancedStats && (
               <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mb-6">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2"></div>
-                Live-Daten • Aktualisiert {new Date(stats.lastUpdate).toLocaleTimeString('de-DE')}
+                Live-Daten • {liveStats.formattedData.onlineMembers} online • Aktualisiert {new Date(enhancedStats.lastUpdate).toLocaleTimeString('de-DE')}
               </div>
             )}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {communityStats.map((stat, index) => (
-              <AnimatedStatCounter 
+              <AnimatedStatCard 
                 key={index} 
                 label={stat.label}
                 value={stat.value} 
                 suffix={stat.suffix}
                 delay={index * 200} 
-                isVisible={isVisible.stats} 
+                isVisible={isVisible.stats}
+                gradient={stat.gradient}
+                icon={stat.icon}
               />
             ))}
           </div>
           
-          {/* Zusätzliche Live-Statistiken */}
-          {stats && (
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6 text-center">
-                <div className="text-2xl font-bold text-white mb-2">
-                  {stats.members.newThisWeek}
-                </div>
-                <div className="text-primary-200 text-sm">
-                  Neue Mitglieder diese Woche
-                </div>
-              </div>
-              
-              <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6 text-center">
-                <div className="text-2xl font-bold text-white mb-2">
-                  {stats.activity.activeVoiceSessions}
-                </div>
-                <div className="text-primary-200 text-sm">
-                  Gerade im Voice Chat
-                </div>
-              </div>
-              
-              <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6 text-center">
-                <div className="text-2xl font-bold text-white mb-2">
-                  {Math.round((stats.members.active / stats.members.total) * 100)}%
-                </div>
-                <div className="text-primary-200 text-sm">
-                  Aktivitätsrate (7 Tage)
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Error State für Stats */}
+          {/* Error State */}
           {statsError && (
             <div className="mt-8 text-center">
               <div className="inline-flex items-center px-4 py-2 rounded-lg bg-red-100 text-red-800 text-sm">
@@ -494,7 +595,7 @@ const HomePage = () => {
         </div>
       </div>
       
-      {/* Events Section - mit Card-Flip Animation */}
+      {/* Events Section */}
       <div 
         id="events" 
         className={`py-16 bg-light-bg-primary dark:bg-dark-bg-primary transition-all duration-1000 ${isVisible.events ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -520,15 +621,6 @@ const HomePage = () => {
               />
             ))}
           </div>
-          
-          <div className="mt-12 text-center">
-            <button className="group inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg transition transform hover:-translate-y-1 pulse-animation">
-              Alle Events ansehen
-              <svg className="ml-2 -mr-1 h-5 w-5 transform transition-transform group-hover:translate-x-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -543,9 +635,6 @@ const HomePage = () => {
             <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl neon-glow">
               Unsere Featured Streamer
             </p>
-            <p className="mt-4 max-w-2xl text-xl text-light-text-secondary dark:text-dark-text-secondary lg:mx-auto">
-              Schau dir die Streams unserer Community-Mitglieder an und unterstütze lokale Talente!
-            </p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -557,15 +646,6 @@ const HomePage = () => {
                 isVisible={isVisible.streamers} 
               />
             ))}
-          </div>
-          
-          <div className="mt-12 text-center">
-            <button className="group inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg transition transform hover:-translate-y-1 pulse-animation">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43z"/>
-              </svg>
-              Alle Streamer entdecken
-            </button>
           </div>
         </div>
       </div>
@@ -581,29 +661,16 @@ const HomePage = () => {
             <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl neon-glow">
               SimpleGaming Highlights
             </p>
-            <p className="mt-4 max-w-2xl text-xl text-light-text-secondary dark:text-dark-text-secondary lg:mx-auto">
-              Entdecke die neuesten Kreationen und Erfolge unserer Community-Mitglieder!
-            </p>
           </div>
           
-          {/* Community Carousel */}
           <CommunityCarousel 
             items={communityItems} 
             isVisible={isVisible.community}
           />
-          
-          <div className="mt-12 text-center">
-            <button className="group inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg transition transform hover:-translate-y-1 pulse-animation">
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Mehr Community-Inhalte
-            </button>
-          </div>
         </div>
       </div>
       
-      {/* Testimonials Section - mit echten Top-Usern */}
+      {/* Testimonials Section */}
       <div 
         id="testimonials" 
         className={`py-16 bg-light-bg-primary dark:bg-dark-bg-primary transition-all duration-1000 ${isVisible.testimonials ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
@@ -614,11 +681,6 @@ const HomePage = () => {
             <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl neon-glow">
               Was unsere Mitglieder sagen
             </p>
-            {stats?.highlights?.topUsers?.length > 0 && (
-              <p className="mt-4 text-lg text-light-text-secondary dark:text-dark-text-secondary">
-                Stimmen unserer aktivsten Community-Mitglieder
-              </p>
-            )}
           </div>
           
           <TestimonialSlider 
@@ -628,14 +690,12 @@ const HomePage = () => {
         </div>
       </div>
       
-      {/* Call to Action Section - mit Live-Statistiken */}
+      {/* Enhanced Call to Action Section */}
       <div 
         id="cta" 
         className={`py-16 relative overflow-hidden transition-all duration-1000 ${isVisible.cta ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
       >
-        {/* Animated Background */}
         <div className="absolute inset-0 bg-gradient-to-r from-primary-600 to-primary-800 z-0">
-          {/* Animierte Kreise als Hintergrund */}
           <div className="absolute w-96 h-96 -top-20 -left-20 bg-primary-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
           <div className="absolute w-96 h-96 top-1/4 right-1/3 bg-purple-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
           <div className="absolute w-96 h-96 bottom-0 right-0 bg-indigo-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
@@ -647,20 +707,38 @@ const HomePage = () => {
               <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl neon-glow">
                 <span className="block">Bereit, beizutreten?</span>
                 <span className="block text-primary-300">
-                  {stats ? 
-                    `Werde Teil von ${stats.formatted?.members?.total || stats.members.total} Gamern!` : 
+                  {enhancedStats ? 
+                    `Werde Teil von ${enhancedStats.formatted?.members?.total || enhancedStats.members.total} Gamern!` : 
                     'Werde noch heute Teil von SimpleGaming!'
                   }
                 </span>
               </h2>
               
-              {/* Live-Aktivität Anzeige */}
-              {stats && (
+              {/* Enhanced Live-Aktivität Anzeige */}
+              {enhancedStats && liveStats.isOnline && (
                 <div className="mt-6 flex flex-wrap gap-4">
                   <div className="flex items-center bg-white bg-opacity-20 rounded-lg px-4 py-2">
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse mr-2"></div>
+                    <div className="w-3 h-3 bg-green-400 rounded-full animate-ping mr-2"></div>
                     <span className="text-white text-sm font-medium">
-                      {stats.activity.activeVoiceSessions} gerade online
+                      {liveStats.formattedData.onlineMembers} gerade online
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center bg-white bg-opacity-20 rounded-lg px-4 py-2">
+                    <svg className="w-4 h-4 text-blue-300 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd"/>
+                    </svg>
+                    <span className="text-white text-sm font-medium">
+                      {liveStats.formattedData.activeVoiceSessions} im Voice Chat
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center bg-white bg-opacity-20 rounded-lg px-4 py-2">
+                    <svg className="w-4 h-4 text-purple-300 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"/>
+                    </svg>
+                    <span className="text-white text-sm font-medium">
+                      {liveStats.formattedData.currentlyPlaying} spielen gerade
                     </span>
                   </div>
                   
@@ -669,17 +747,7 @@ const HomePage = () => {
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
                     <span className="text-white text-sm font-medium">
-                      {stats.members.newThisWeek} neue Mitglieder diese Woche
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center bg-white bg-opacity-20 rounded-lg px-4 py-2">
-                    <svg className="w-4 h-4 text-blue-300 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-                      <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
-                    </svg>
-                    <span className="text-white text-sm font-medium">
-                      {stats.formatted?.activity?.totalMessages || stats.activity.totalMessages} Nachrichten
+                      {enhancedStats.members.newThisWeek} neue Mitglieder diese Woche
                     </span>
                   </div>
                 </div>
@@ -701,7 +769,7 @@ const HomePage = () => {
             </div>
           </div>
           
-          {/* Stick Figure Scene - Fun Gaming Session mit Live-Daten */}
+          {/* Live Gaming Scene mit echten Daten */}
           <div className="mt-10">
             <div className="relative flex justify-center">
               <svg viewBox="0 0 300 100" className="w-full max-w-lg opacity-40">
@@ -754,12 +822,20 @@ const HomePage = () => {
               </svg>
             </div>
             
-            {/* Live-Aktivität Text */}
-            {stats && (
-              <div className="mt-6 text-center">
+            {/* Live-Aktivität Text mit echten Daten */}
+            {enhancedStats && liveStats.isOnline && (
+              <div className="mt-6 text-center space-y-2">
                 <p className="text-white text-opacity-80 text-lg">
-                  Gerade spielen <span className="font-bold text-white">{stats.activity.activeVoiceSessions}</span> Mitglieder zusammen
+                  Gerade spielen <span className="font-bold text-white">{liveStats.formattedData.currentlyPlaying}</span> Mitglieder zusammen
                 </p>
+                <p className="text-white text-opacity-60 text-sm">
+                  {liveStats.formattedData.activeVoiceSessions} aktive Voice-Sessions • {liveStats.formattedData.onlineMembers} online
+                </p>
+                {liveStats.timestamp && (
+                  <p className="text-white text-opacity-40 text-xs">
+                    Live-Update: {liveStats.timestamp.toLocaleTimeString('de-DE')}
+                  </p>
+                )}
               </div>
             )}
           </div>
