@@ -14,11 +14,27 @@ import FeaturesSection from '../../components/public/FeaturesSection';
 import CommunityRulesSection from '../../components/public/CommunityRulesSection';
 import FeaturedStreamer from '../../components/public/FeaturedStreamer';
 
-// NEUE Live-Stats Komponente
+
+
+
+
 const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
-  const onlineCount = useAnimatedCounter(liveStats.onlineMembers, 1500, isVisible);
-  const voiceCount = useAnimatedCounter(liveStats.activeVoiceSessions, 1500, isVisible);
-  const playingCount = useAnimatedCounter(liveStats.currentlyPlaying, 1500, isVisible);
+  // ✅ FIXED: Bessere Animation-Kontrolle
+  const onlineCount = useAnimatedCounter(
+    liveStats.onlineMembers, 
+    1500, 
+    isVisible && liveStats.onlineMembers > 0
+  );
+  const voiceCount = useAnimatedCounter(
+    liveStats.activeVoiceSessions, 
+    1500, 
+    isVisible && liveStats.activeVoiceSessions >= 0
+  );
+  const playingCount = useAnimatedCounter(
+    liveStats.currentlyPlaying, 
+    1500, 
+    isVisible && liveStats.currentlyPlaying >= 0
+  );
 
   return (
     <div className={`transform transition-all duration-1000 ${
@@ -55,7 +71,8 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
               <div>
                 <p className="text-green-100 text-sm font-medium">Gerade Online</p>
                 <p className="text-3xl font-bold">
-                  {onlineCount.formatted}
+                  {/* ✅ FIXED: Nur Animation zeigen wenn sich Wert ändert */}
+                  {onlineCount.isInitialized ? onlineCount.formatted : liveStats.formattedData.onlineMembers}
                   {onlineCount.isAnimating && (
                     <span className="inline-block w-1 h-8 bg-white ml-1 animate-pulse"></span>
                   )}
@@ -82,7 +99,8 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
               <div>
                 <p className="text-blue-100 text-sm font-medium">Im Voice Chat</p>
                 <p className="text-3xl font-bold">
-                  {voiceCount.formatted}
+                  {/* ✅ FIXED: Stabilere Anzeige */}
+                  {voiceCount.isInitialized ? voiceCount.formatted : liveStats.formattedData.activeVoiceSessions}
                   {voiceCount.isAnimating && (
                     <span className="inline-block w-1 h-8 bg-white ml-1 animate-pulse"></span>
                   )}
@@ -109,7 +127,8 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
               <div>
                 <p className="text-purple-100 text-sm font-medium">Spielen gerade</p>
                 <p className="text-3xl font-bold">
-                  {playingCount.formatted}
+                  {/* ✅ FIXED: Konsistente Anzeige */}
+                  {playingCount.isInitialized ? playingCount.formatted : liveStats.formattedData.currentlyPlaying}
                   {playingCount.isAnimating && (
                     <span className="inline-block w-1 h-8 bg-white ml-1 animate-pulse"></span>
                   )}
@@ -133,14 +152,15 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
       {liveStats.performance && process.env.NODE_ENV === 'development' && (
         <div className="text-center text-xs text-gray-500 dark:text-gray-400">
           Cache-Alter: {liveStats.cacheAge}min | 
-          Update: {liveStats.performance.updateInProgress ? 'Läuft...' : 'Bereit'}
+          Update: {liveStats.performance.updateInProgress ? 'Läuft...' : 'Bereit'} |
+          Nächstes Update in: {Math.floor((60000 - (Date.now() % 60000)) / 1000)}s
         </div>
       )}
     </div>
   );
 };
 
-// Animierte Statistik-Karte Komponente
+// ✅ ENHANCED: Stabilere Animierte Statistik-Karte Komponente
 const AnimatedStatCard = ({ label, value, suffix = '', delay = 0, isVisible, gradient, icon }) => {
   const animatedValue = useAnimatedCounter(
     parseInt(value.toString().replace(/,/g, '')) || 0, 
@@ -168,9 +188,18 @@ const AnimatedStatCard = ({ label, value, suffix = '', delay = 0, isVisible, gra
           </div>
           
           <p className="text-4xl md:text-5xl font-extrabold mb-2">
-            {animatedValue.formatted}{suffix}
-            {animatedValue.isAnimating && (
-              <span className="inline-block w-1 h-10 bg-white ml-2 animate-pulse"></span>
+            {/* ✅ FIXED: Bessere Fallback-Anzeige */}
+            {animatedValue.isInitialized ? (
+              <>
+                {animatedValue.formatted}{suffix}
+                {animatedValue.isAnimating && (
+                  <span className="inline-block w-1 h-10 bg-white ml-2 animate-pulse"></span>
+                )}
+              </>
+            ) : (
+              <>
+                {value.toLocaleString()}{suffix}
+              </>
             )}
           </p>
           <p className="text-lg opacity-90">{label}</p>
@@ -214,6 +243,7 @@ const FloatingLiveBadge = ({ liveStats }) => {
   );
 };
 
+// ✅ ENHANCED: Update HomePage Hook-Konfiguration
 const HomePage = () => {
   // Stats Hooks - kombiniert normale und Live-Daten
   const { stats, loading: statsLoading, error: statsError } = useServerStats({
@@ -221,8 +251,9 @@ const HomePage = () => {
     refreshInterval: 5 * 60 * 1000 // 5 Minuten für normale Stats
   });
 
+  // ✅ FIXED: Live-Stats mit 1-Minute Updates
   const liveStats = useLiveStats({
-    refreshInterval: 15000, // 15 Sekunden für Live-Daten
+    refreshInterval: 60000, // ✅ 1 Minute statt 15 Sekunden
     autoRefresh: true
   });
 

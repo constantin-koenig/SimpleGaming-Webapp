@@ -1,4 +1,4 @@
-// frontend/src/hooks/useServerStats.js - ENHANCED für Live-Daten
+// frontend/src/hooks/useServerStats.js - FIXED: 1 Minute Updates & Stable Animations
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 
@@ -108,10 +108,10 @@ export const useServerStats = (options = {}) => {
   };
 };
 
-// NEUER Hook für Live-Daten mit 1-Minute Updates
+// ✅ FIXED: Live-Stats mit 1-Minute Updates und stabilen Animationen
 export const useLiveStats = (options = {}) => {
   const {
-    refreshInterval = 60000, // ✅ 1 Minute statt 15 Sekunden
+    refreshInterval = 60000, // ✅ 1 Minute (war 15 Sekunden)
     autoRefresh = true
   } = options;
 
@@ -129,6 +129,13 @@ export const useLiveStats = (options = {}) => {
   const lastFetchRef = useRef(null);
   const retryCountRef = useRef(0);
   const maxRetries = 3;
+  
+  // ✅ FIXED: Previous values für stabile Animationen
+  const previousValuesRef = useRef({
+    onlineMembers: 0,
+    activeVoiceSessions: 0,
+    currentlyPlaying: 0
+  });
 
   const fetchLiveData = useCallback(async (showLoading = false) => {
     try {
@@ -151,7 +158,34 @@ export const useLiveStats = (options = {}) => {
           performance: response.data.performance
         };
 
-        setLiveData(newData);
+        // ✅ FIXED: Nur aktualisieren wenn sich Werte wirklich geändert haben
+        const hasChanges = (
+          newData.onlineMembers !== previousValuesRef.current.onlineMembers ||
+          newData.activeVoiceSessions !== previousValuesRef.current.activeVoiceSessions ||
+          newData.currentlyPlaying !== previousValuesRef.current.currentlyPlaying
+        );
+
+        if (hasChanges || !lastFetchRef.current) {
+          // Update previous values BEFORE setting new data
+          previousValuesRef.current = {
+            onlineMembers: newData.onlineMembers,
+            activeVoiceSessions: newData.activeVoiceSessions,
+            currentlyPlaying: newData.currentlyPlaying
+          };
+
+          setLiveData(newData);
+          console.log(`📊 Live stats updated: ${newData.onlineMembers} online, ${newData.activeVoiceSessions} voice, ${newData.currentlyPlaying} playing`);
+        } else {
+          console.log('📊 Live stats unchanged, skipping animation');
+          // Update timestamp even if values unchanged
+          setLiveData(prev => ({
+            ...prev,
+            timestamp: newData.timestamp,
+            cached: newData.cached,
+            performance: newData.performance
+          }));
+        }
+
         lastFetchRef.current = Date.now();
         retryCountRef.current = 0;
         setConnectionStatus('connected');
@@ -277,15 +311,31 @@ export const useLiveStats = (options = {}) => {
   };
 };
 
-// Hook für animierte Zahlen-Updates
+// ✅ ENHANCED: Stabilere animierte Zahlen-Updates
 export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate = true) => {
   const [currentValue, setCurrentValue] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const animationRef = useRef(null);
   const lastTargetRef = useRef(0);
+  const isInitializedRef = useRef(false);
 
   useEffect(() => {
-    if (!shouldAnimate || targetValue === lastTargetRef.current) return;
+    // ✅ FIXED: Bei erstem Laden sofort auf Zielwert setzen (keine Animation)
+    if (!isInitializedRef.current && targetValue > 0) {
+      setCurrentValue(targetValue);
+      lastTargetRef.current = targetValue;
+      isInitializedRef.current = true;
+      return;
+    }
+
+    // ✅ FIXED: Nur animieren wenn sich Wert wirklich geändert hat und bereits initialisiert
+    if (!shouldAnimate || !isInitializedRef.current || targetValue === lastTargetRef.current) {
+      if (!shouldAnimate && targetValue !== lastTargetRef.current) {
+        setCurrentValue(targetValue);
+        lastTargetRef.current = targetValue;
+      }
+      return;
+    }
 
     setIsAnimating(true);
     const startValue = lastTargetRef.current;
@@ -296,8 +346,8 @@ export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate =
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      // Easing function (ease-out)
-      const easeOut = 1 - Math.pow(1 - progress, 3);
+      // ✅ IMPROVED: Sanftere Easing-Funktion
+      const easeOut = 1 - Math.pow(1 - progress, 2);
       const newValue = Math.floor(startValue + (difference * easeOut));
       
       setCurrentValue(newValue);
@@ -324,16 +374,19 @@ export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate =
     };
   }, [targetValue, duration, shouldAnimate]);
 
+  // ✅ FIXED: Cleanup bei Component unmount
   useEffect(() => {
-    if (!shouldAnimate) {
-      setCurrentValue(targetValue);
-      lastTargetRef.current = targetValue;
-    }
-  }, [targetValue, shouldAnimate]);
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
 
   return { 
     value: currentValue, 
     isAnimating,
-    formatted: currentValue.toLocaleString()
+    formatted: currentValue.toLocaleString(),
+    isInitialized: isInitializedRef.current
   };
 };
