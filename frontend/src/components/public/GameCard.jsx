@@ -1,7 +1,9 @@
-// frontend/src/components/public/GameCard.jsx - ENHANCED mit echten Gaming-Daten
-import React from 'react';
+// frontend/src/components/public/GameCard.jsx - ENHANCED mit einmaliger Shimmer-Animation
+import React, { useState, useEffect } from 'react';
 
 const GameCard = ({ game, delay = 0, isVisible }) => {
+  const [shimmerShown, setShimmerShown] = useState(false);
+
   // Formatiere die Zahlen für bessere Anzeige
   const formatNumber = (num) => {
     if (num >= 1000) {
@@ -31,7 +33,7 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
 
   const getBadgeText = () => {
     if (game.isActive && game.currentPlayers > 0) {
-      return `${game.currentPlayers} spielen jetzt`;
+      return 'Live aktiv';
     } else if (game.hoursThisWeek > 50) {
       return 'Sehr beliebt';
     } else if (game.sessions > 100) {
@@ -69,11 +71,18 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
     return `https://via.placeholder.com/300x180/${colorScheme}?text=${encodedName}`;
   };
 
+  // Shimmer-Effekt nur einmal beim ersten Anzeigen
+  useEffect(() => {
+    if (isVisible && !shimmerShown) {
+      setShimmerShown(true);
+    }
+  }, [isVisible, shimmerShown]);
+
   return (
     <div 
       className={`transform transition-all duration-1000 ${
         isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
-      } hover-lift feature-card shimmer`}
+      } hover-lift feature-card ${!shimmerShown && isVisible ? 'shimmer' : ''}`}
       style={{ transitionDelay: `${delay}ms` }}
     >
       <div className="bg-light-bg-primary dark:bg-dark-bg-primary rounded-xl overflow-hidden shadow-lg hover:shadow-2xl border border-light-border-primary dark:border-dark-border-primary">
@@ -88,15 +97,6 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
             />
           </div>
           
-          {/* Live-Aktivitäts-Badge */}
-          <div className="absolute top-3 left-3">
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${getBadgeColor()}`}>
-              {game.isActive && game.currentPlayers > 0 && (
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse mr-1"></div>
-              )}
-              {getBadgeText()}
-            </span>
-          </div>
 
           {/* Kategorie-Badge */}
           <div className="absolute top-3 right-3">
@@ -181,13 +181,13 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
             {game.isActive && game.currentPlayers > 0 ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
                   <span className="text-sm font-medium text-green-600 dark:text-green-400">
                     Live aktiv
                   </span>
                 </div>
                 <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                  {game.currentPlayers} spielen gerade
+                  Gerade gespielt
                 </span>
               </div>
             ) : game.lastSeen || game.lastPlayed ? (
