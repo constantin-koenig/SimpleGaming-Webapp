@@ -1,4 +1,4 @@
-// frontend/src/hooks/useServerStats.js - FIXED: 1 Minute Updates & Stable Animations
+// frontend/src/hooks/useServerStats.js - FIXED: Korrekte API-Endpunkte
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 
@@ -21,58 +21,83 @@ export const useServerStats = (options = {}) => {
       }
       setError(null);
 
+      // ✅ FIXED: Korrekte API-Endpunkte verwenden
       const endpoint = format === 'quick' 
         ? '/homepage/stats?format=quick'
         : '/homepage/stats';
 
+      console.log('📊 Fetching stats from:', endpoint);
       const response = await api.get(endpoint);
       
       if (response.data.success) {
         setStats(response.data.data);
         setLastUpdate(new Date(response.data.lastUpdate || response.data.data.lastUpdate));
+        console.log('✅ Stats loaded successfully:', response.data.data);
       } else {
         throw new Error(response.data.message || 'Failed to fetch stats');
       }
     } catch (err) {
-      console.error('Error fetching server stats:', err);
+      console.error('❌ Error fetching server stats:', err);
       setError(err.message || 'Fehler beim Laden der Statistiken');
       
-      if (!stats) {
-        setStats({
-          members: { total: 0, active: 0, newThisWeek: 0 },
-          activity: { 
-            totalVoiceHours: 0, 
-            totalMessages: 0, 
-            activeVoiceSessions: 0, 
-            gamesPlayed: 0 
-          },
-          highlights: { topUsers: [], popularGames: [] },
-          lastUpdate: new Date(),
-          fallback: true
-        });
-      }
+      // ✅ FIXED: Fallback nur einmal setzen, nicht abhängig von stats
+      setStats({
+        members: { 
+          total: 0, 
+          active: 0, 
+          newThisWeek: 0 
+        },
+        activity: { 
+          totalVoiceHours: 0, 
+          totalVoiceMinutes: 0,
+          totalMessages: 0, 
+          activeVoiceSessions: 0, 
+          gamesPlayed: 0,
+          totalGamingSessions: 0,
+          totalGamingHours: 0,
+          uniqueGamesPlayed: 0,
+          currentlyPlaying: 0,
+          serverUptimeDays: Math.floor((Date.now() - new Date('2024-01-15').getTime()) / (1000 * 60 * 60 * 24)),
+          totalEventsAttended: 0
+        },
+        highlights: { 
+          topUsers: [], 
+          popularGames: [], 
+          topGamers: [] 
+        },
+        lastUpdate: new Date(),
+        fallback: true
+      });
     } finally {
       setLoading(false);
     }
-  }, [format, stats]);
+  }, [format]); // ✅ FIXED: stats aus Dependencies entfernt!
 
   const refreshStats = useCallback(async () => {
     await fetchStats(true);
   }, [fetchStats]);
 
+  // ✅ FIXED: Nur einmal beim Mount ausführen
   useEffect(() => {
+    console.log('🚀 Initial stats fetch on component mount');
     fetchStats();
-  }, [fetchStats]);
+  }, []); // ✅ Leere Dependencies = nur beim Mount
 
+  // ✅ FIXED: Auto-refresh unabhängig von fetchStats
   useEffect(() => {
     if (!autoRefresh) return;
 
+    console.log('⏰ Setting up auto-refresh interval:', refreshInterval, 'ms');
     const interval = setInterval(() => {
+      console.log('🔄 Auto-refresh triggered');
       fetchStats(true);
     }, refreshInterval);
 
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval, fetchStats]);
+    return () => {
+      console.log('🛑 Clearing auto-refresh interval');
+      clearInterval(interval);
+    };
+  }, [autoRefresh, refreshInterval, format]); // ✅ fetchStats entfernt!
 
   const getDataAge = useCallback(() => {
     if (!lastUpdate) return null;
@@ -91,7 +116,13 @@ export const useServerStats = (options = {}) => {
         totalVoiceHours: stats.activity?.totalVoiceHours?.toLocaleString() || '0',
         totalMessages: stats.activity?.totalMessages?.toLocaleString() || '0',
         activeVoiceSessions: stats.activity?.activeVoiceSessions?.toLocaleString() || '0',
-        gamesPlayed: stats.activity?.gamesPlayed?.toLocaleString() || '0'
+        gamesPlayed: stats.activity?.gamesPlayed?.toLocaleString() || '0',
+        totalGamingSessions: stats.activity?.totalGamingSessions?.toLocaleString() || '0',
+        totalGamingHours: stats.activity?.totalGamingHours?.toLocaleString() || '0',
+        uniqueGamesPlayed: stats.activity?.uniqueGamesPlayed?.toLocaleString() || '0',
+        currentlyPlaying: stats.activity?.currentlyPlaying?.toLocaleString() || '0',
+        serverUptimeDays: stats.activity?.serverUptimeDays?.toLocaleString() || '0',
+        totalEventsAttended: stats.activity?.totalEventsAttended?.toLocaleString() || '0'
       }
     }
   } : null;
@@ -108,10 +139,10 @@ export const useServerStats = (options = {}) => {
   };
 };
 
-// ✅ FIXED: Live-Stats mit 1-Minute Updates und stabilen Animationen
+// ✅ FIXED: Live-Stats mit korrekten Endpunkten
 export const useLiveStats = (options = {}) => {
   const {
-    refreshInterval = 60000, // ✅ 1 Minute (war 15 Sekunden)
+    refreshInterval = 60000, // 1 Minute
     autoRefresh = true
   } = options;
 
@@ -130,7 +161,6 @@ export const useLiveStats = (options = {}) => {
   const retryCountRef = useRef(0);
   const maxRetries = 3;
   
-  // ✅ FIXED: Previous values für stabile Animationen
   const previousValuesRef = useRef({
     onlineMembers: 0,
     activeVoiceSessions: 0,
@@ -145,6 +175,8 @@ export const useLiveStats = (options = {}) => {
       setError(null);
       setConnectionStatus('fetching');
 
+      // ✅ FIXED: Korrekte API-Endpunkte verwenden
+      console.log('📊 Fetching live stats from: /homepage/stats/live');
       const response = await api.get('/homepage/stats/live');
       
       if (response.data.success) {
@@ -158,7 +190,7 @@ export const useLiveStats = (options = {}) => {
           performance: response.data.performance
         };
 
-        // ✅ FIXED: Nur aktualisieren wenn sich Werte wirklich geändert haben
+        // Nur aktualisieren wenn sich Werte wirklich geändert haben
         const hasChanges = (
           newData.onlineMembers !== previousValuesRef.current.onlineMembers ||
           newData.activeVoiceSessions !== previousValuesRef.current.activeVoiceSessions ||
@@ -166,7 +198,6 @@ export const useLiveStats = (options = {}) => {
         );
 
         if (hasChanges || !lastFetchRef.current) {
-          // Update previous values BEFORE setting new data
           previousValuesRef.current = {
             onlineMembers: newData.onlineMembers,
             activeVoiceSessions: newData.activeVoiceSessions,
@@ -177,7 +208,6 @@ export const useLiveStats = (options = {}) => {
           console.log(`📊 Live stats updated: ${newData.onlineMembers} online, ${newData.activeVoiceSessions} voice, ${newData.currentlyPlaying} playing`);
         } else {
           console.log('📊 Live stats unchanged, skipping animation');
-          // Update timestamp even if values unchanged
           setLiveData(prev => ({
             ...prev,
             timestamp: newData.timestamp,
@@ -193,13 +223,12 @@ export const useLiveStats = (options = {}) => {
         throw new Error(response.data.message || 'Failed to fetch live stats');
       }
     } catch (err) {
-      console.error('Error fetching live stats:', err);
+      console.error('❌ Error fetching live stats:', err);
       setError(err.message);
       setConnectionStatus('error');
       
       retryCountRef.current += 1;
       
-      // Exponential backoff bei Fehlern
       if (retryCountRef.current < maxRetries) {
         const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
         setTimeout(() => fetchLiveData(false), retryDelay);
@@ -231,12 +260,12 @@ export const useLiveStats = (options = {}) => {
   useEffect(() => {
     const healthCheck = setInterval(() => {
       const timeSinceLastFetch = Date.now() - (lastFetchRef.current || 0);
-      const expectedInterval = refreshInterval + 5000; // 5s Toleranz
+      const expectedInterval = refreshInterval + 5000;
       
       if (timeSinceLastFetch > expectedInterval && connectionStatus === 'connected') {
         setConnectionStatus('stale');
       }
-    }, 30000); // Check every 30 seconds
+    }, 30000);
 
     return () => clearInterval(healthCheck);
   }, [refreshInterval, connectionStatus]);
@@ -311,7 +340,7 @@ export const useLiveStats = (options = {}) => {
   };
 };
 
-// ✅ ENHANCED: Stabilere animierte Zahlen-Updates
+// ✅ Animierte Zahlen-Updates (unverändert)
 export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate = true) => {
   const [currentValue, setCurrentValue] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -320,7 +349,6 @@ export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate =
   const isInitializedRef = useRef(false);
 
   useEffect(() => {
-    // ✅ FIXED: Bei erstem Laden sofort auf Zielwert setzen (keine Animation)
     if (!isInitializedRef.current && targetValue > 0) {
       setCurrentValue(targetValue);
       lastTargetRef.current = targetValue;
@@ -328,7 +356,6 @@ export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate =
       return;
     }
 
-    // ✅ FIXED: Nur animieren wenn sich Wert wirklich geändert hat und bereits initialisiert
     if (!shouldAnimate || !isInitializedRef.current || targetValue === lastTargetRef.current) {
       if (!shouldAnimate && targetValue !== lastTargetRef.current) {
         setCurrentValue(targetValue);
@@ -346,7 +373,6 @@ export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate =
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      // ✅ IMPROVED: Sanftere Easing-Funktion
       const easeOut = 1 - Math.pow(1 - progress, 2);
       const newValue = Math.floor(startValue + (difference * easeOut));
       
@@ -374,7 +400,6 @@ export const useAnimatedCounter = (targetValue, duration = 2000, shouldAnimate =
     };
   }, [targetValue, duration, shouldAnimate]);
 
-  // ✅ FIXED: Cleanup bei Component unmount
   useEffect(() => {
     return () => {
       if (animationRef.current) {

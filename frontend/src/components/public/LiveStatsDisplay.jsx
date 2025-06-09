@@ -131,8 +131,6 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
       {/* Performance Info (nur für Debug/Admins) */}
       {liveStats.performance && process.env.NODE_ENV === 'development' && (
         <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-          Cache-Alter: {liveStats.cacheAge}min | 
-          Update: {liveStats.performance.updateInProgress ? 'Läuft...' : 'Bereit'} |
           Nächstes Update in: {Math.floor((60000 - (Date.now() % 60000)) / 1000)}s
         </div>
       )}

@@ -1,4 +1,4 @@
-// frontend/src/pages/public/HomePage.jsx - REFACTORED mit aufgeteilten Komponenten
+// frontend/src/pages/public/HomePage.jsx - FINAL mit echten Backend-Daten
 import React, { useState, useEffect } from 'react';
 import PublicLayout from '../../components/common/PublicLayout';
 import { useServerStats, useLiveStats } from '../../hooks/useServerStats';
@@ -18,7 +18,6 @@ import CommunityCarousel from '../../components/public/CommunityCarousel';
 import HeroSection from '../../components/public/HeroSection';
 import FeaturesSection from '../../components/public/FeaturesSection';
 import CommunityRulesSection from '../../components/public/CommunityRulesSection';
-import FeaturedStreamer from '../../components/public/FeaturedStreamer';
 
 const HomePage = () => {
   // Stats Hooks
@@ -35,18 +34,17 @@ const HomePage = () => {
   // Beliebte Spiele Hook
   const { games: popularGames, loading: gamesLoading, error: gamesError } = usePopularGames('week', 4);
 
-  // Animation States
+  // Animation States (ohne streamers)
   const [isVisible, setIsVisible] = useState({
     hero: false,
+    liveStats: false,
     features: false,
     rules: false,
     games: false,
     stats: false,
-    liveStats: false,
     events: false,
     community: false,
     testimonials: false,
-    streamers: false,
     cta: false
   });
   
@@ -59,7 +57,7 @@ const HomePage = () => {
       
       setIsVisible(prev => ({ ...prev, hero: true }));
       
-      const sections = ['features', 'rules', 'games', 'stats', 'liveStats', 'events', 'community', 'streamers', 'testimonials', 'cta'];
+      const sections = ['liveStats', 'features', 'rules', 'games', 'stats', 'events', 'community', 'testimonials', 'cta'];
       
       sections.forEach(sectionId => {
         const section = document.getElementById(sectionId);
@@ -84,35 +82,35 @@ const HomePage = () => {
     }
   } : null;
 
-  // Community Statistiken Konfiguration
+  // ✅ FINALE Community Statistiken mit echten Backend-Daten
   const communityStats = [
     { 
       label: 'Community Mitglieder', 
-      value: enhancedStats?.members?.total || 1283, 
-      suffix: '+',
+      value: enhancedStats?.members?.total || 0, 
+      suffix: '',
       gradient: 'bg-gradient-to-br from-blue-500 to-blue-600',
       icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/></svg>
     },
     { 
-      label: 'Aktive Spieler', 
-      value: enhancedStats?.members?.active || 450, 
-      suffix: '+',
+      label: 'Nachrichten gesendet', 
+      value: enhancedStats?.activity?.totalMessages || 0, 
+      suffix: '',
       gradient: 'bg-gradient-to-br from-green-500 to-green-600',
-      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 13V5a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h3l3 3 3-3h3a2 2 0 002-2zM5 7a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H6z" clipRule="evenodd"/></svg>
     },
     { 
-      label: 'Stunden Voice Chat', 
-      value: enhancedStats?.activity?.totalVoiceHours || 15460, 
-      suffix: '+',
+      label: 'Voice Chat Stunden', 
+      value: enhancedStats?.activity?.totalVoiceHours || 0, 
+      suffix: 'h',
       gradient: 'bg-gradient-to-br from-purple-500 to-purple-600',
       icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M7 4a3 3 0 616 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd"/></svg>
     },
     { 
-      label: 'Gaming Sessions', 
-      value: enhancedStats?.activity?.totalGamingSessions || 5842, 
-      suffix: '+',
+      label: 'Community existiert seit', 
+      value: enhancedStats?.activity?.serverUptimeDays || Math.floor((Date.now() - new Date('2024-01-15').getTime()) / (1000 * 60 * 60 * 24)), 
+      suffix: '',
       gradient: 'bg-gradient-to-br from-orange-500 to-orange-600',
-      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"/></svg>
+      icon: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 011.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 011.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd"/></svg>
     }
   ];
 
@@ -202,33 +200,6 @@ const HomePage = () => {
       text: 'Die Gameserver sind super stabil und die Admins kümmern sich gut um die Community. Immer gerne dabei!'
     }
   ];
-
-  const featuredStreamers = [
-    {
-      id: 1,
-      name: 'NinjaGirl',
-      avatar: 'https://via.placeholder.com/100',
-      game: 'Valorant',
-      followers: 25600,
-      quote: 'Ich streame jeden Tag für die beste Community da draußen!'
-    },
-    {
-      id: 2,
-      name: 'ProGamer99',
-      avatar: 'https://via.placeholder.com/100',
-      game: 'League of Legends',
-      followers: 18300,
-      quote: 'SimpleGaming gibt mir die Motivation, jeden Tag besser zu werden.'
-    },
-    {
-      id: 3,
-      name: 'MineKing42',
-      avatar: 'https://via.placeholder.com/100',
-      game: 'Minecraft',
-      followers: 12500,
-      quote: 'Kreativität kennt keine Grenzen - genau wie diese Community!'
-    }
-  ];
   
   return (
     <PublicLayout>
@@ -237,6 +208,13 @@ const HomePage = () => {
       
       {/* Floating Live Badge */}
       <FloatingLiveBadge liveStats={liveStats} />
+      
+      {/* ✅ Live-Stats Section - VERSCHOBEN nach oben, vor Features */}
+      <LiveStatsSection 
+        liveStats={liveStats}
+        baseStats={enhancedStats}
+        isVisible={isVisible.liveStats}
+      />
       
       {/* Features Section */}
       <FeaturesSection id="features" isVisible={isVisible.features} />
@@ -252,15 +230,8 @@ const HomePage = () => {
         enhancedStats={enhancedStats}
         isVisible={isVisible.games}
       />
-
-      {/* Live-Stats Section */}
-      <LiveStatsSection 
-        liveStats={liveStats}
-        baseStats={enhancedStats}
-        isVisible={isVisible.liveStats}
-      />
       
-      {/* Community Statistiken Section */}
+      {/* ✅ FINALE Community Statistiken Section mit echten Daten */}
       <CommunityStatsSection 
         enhancedStats={enhancedStats}
         liveStats={liveStats}
@@ -292,32 +263,6 @@ const HomePage = () => {
                 event={event} 
                 delay={index * 150} 
                 isVisible={isVisible.events} 
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Featured Streamers Section */}
-      <div 
-        id="streamers" 
-        className={`py-16 bg-gradient-to-br from-light-bg-secondary to-light-bg-tertiary dark:from-dark-bg-secondary dark:to-dark-bg-tertiary transition-all duration-1000 pattern-fade ${isVisible.streamers ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="lg:text-center mb-12">
-            <h2 className="text-base text-primary-600 dark:text-primary-400 font-semibold tracking-wide uppercase gradient-text">Streamer</h2>
-            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-light-text-primary dark:text-dark-text-primary sm:text-4xl neon-glow">
-              Unsere Featured Streamer
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {featuredStreamers.map((streamer, index) => (
-              <FeaturedStreamer 
-                key={streamer.id} 
-                streamer={streamer} 
-                delay={index * 150} 
-                isVisible={isVisible.streamers} 
               />
             ))}
           </div>
