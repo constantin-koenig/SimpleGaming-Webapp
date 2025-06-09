@@ -32,7 +32,7 @@ const HomePage = () => {
   });
 
   // Beliebte Spiele Hook
-  const { games: popularGames, loading: gamesLoading, error: gamesError } = usePopularGames('week', 4);
+  const { games: popularGames, loading: gamesLoading, error: gamesError } = usePopularGames('popular', 4);
 
   // Animation States (ohne streamers)
   const [isVisible, setIsVisible] = useState({

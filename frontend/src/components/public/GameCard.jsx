@@ -51,25 +51,7 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
   };
 
   // Platzhalter-Bild Generator
-  const getPlaceholderImage = (gameName, category) => {
-    const colors = {
-      'FPS': '2563EB/FFFFFF', // Blue
-      'MOBA': '7C3AED/FFFFFF', // Purple  
-      'Battle Royale': 'DC2626/FFFFFF', // Red
-      'Sandbox': '059669/FFFFFF', // Green
-      'MMO': 'EA580C/FFFFFF', // Orange
-      'Strategy': '6366F1/FFFFFF', // Indigo
-      'Racing': 'DB2777/FFFFFF', // Pink
-      'Sports': '0891B2/FFFFFF', // Cyan
-      'RPG': '7C2D12/FFFFFF', // Brown
-      'Indie': '4F46E5/FFFFFF', // Primary
-      'Game': '6B7280/FFFFFF' // Gray default
-    };
-    
-    const colorScheme = colors[category] || colors['Game'];
-    const encodedName = encodeURIComponent(gameName.substring(0, 12));
-    return `https://via.placeholder.com/300x180/${colorScheme}?text=${encodedName}`;
-  };
+  
 
   // Shimmer-Effekt nur einmal beim ersten Anzeigen
   useEffect(() => {
@@ -90,7 +72,7 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
         <div className="relative">
           <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
             <img 
-              src={getPlaceholderImage(game.title || game.name, game.category)} 
+              src={game.image} 
               alt={game.title || game.name}
               className="w-full h-full object-cover"
               loading="lazy"

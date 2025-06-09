@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 
-export const usePopularGames = (timeframe = 'week', limit = 4) => {
+export const usePopularGames = (timeframe = 'popular', limit = 4) => {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

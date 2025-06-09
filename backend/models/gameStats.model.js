@@ -343,27 +343,448 @@ gameStatsSchema.statics.handleGameEnd = async function(gameStats, userId, durati
   console.log(`📊 Total game time for ${gameStats.gameName}: ${Math.floor(gameStats.stats.totalMinutes/60)}h ${gameStats.stats.totalMinutes%60}m`);
 };
 
-// ✅ ENHANCED: Popularity Score Berechnung
-gameStatsSchema.statics.calculatePopularityScore = function(gameStats) {
+// ❌ PROBLEM IDENTIFIED: Der Code sortiert NICHT nach popularityScore!
+
+// AKTUELLER CODE (FEHLERHAFT):
+gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit = 10) {
+  // ...
+  switch (timeframe) {
+    case 'today':
+      sortField = 'stats.periods.today.sessions';  // ❌ Sortiert nach Sessions, nicht Score!
+      break;
+    case 'week':
+      sortField = 'stats.periods.thisWeek.sessions';  // ❌ Sortiert nach Sessions, nicht Score!
+      break;
+    case 'popular':
+      sortField = 'metadata.popularityScore';  // ✅ Nur hier wird nach Score sortiert!
+      break;
+  }
+  // ...
+}
+
+// ✅ FIXED VERSION: Popularität sollte IMMER nach Score sortieren
+
+gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit = 10) {
+  try {
+    let matchFilter = {};
+    let scoreMode = 'balanced';
+    
+    // ✅ FIXED: Filter bestimmt Relevanz, aber Sortierung ist IMMER nach popularityScore
+    switch (timeframe) {
+      case 'today':
+        matchFilter['stats.periods.today.sessions'] = { $gte: 1 };
+        scoreMode = 'live_focused'; // Für heute: Live-Aktivität höher gewichtet
+        break;
+      case 'week':
+        matchFilter['stats.periods.thisWeek.sessions'] = { $gte: 1 };
+        scoreMode = 'balanced'; // Für Woche: Ausgewogene Gewichtung
+        break;
+      case 'month':
+        matchFilter['stats.periods.thisMonth.sessions'] = { $gte: 1 };
+        scoreMode = 'hours_focused'; // Für Monat: Spielzeit-fokussiert
+        break;
+      case 'active':
+        matchFilter['currentActivity.currentPlayers'] = { $gt: 0 };
+        scoreMode = 'live_focused'; // Für aktiv: Live-Fokus
+        break;
+      case 'popular':
+      default:
+        matchFilter['stats.totalSessions'] = { $gte: 3 };
+        scoreMode = 'hours_focused'; // Für popular: Spielzeit dominiert
+        break;
+    }
+
+    // ✅ STEP 1: Popularity Scores für alle relevanten Games NEU BERECHNEN
+    console.log(`🎮 Recalculating popularity scores for ${timeframe} with mode: ${scoreMode}`);
+    
+    const relevantGames = await this.find(matchFilter);
+    let updatedCount = 0;
+    
+    for (const game of relevantGames) {
+      const newScore = this.calculatePopularityScore(game, scoreMode);
+      
+      // Nur updaten wenn sich Score geändert hat
+      if (Math.abs(game.metadata.popularityScore - newScore) > 1) {
+        await this.findByIdAndUpdate(game._id, {
+          'metadata.popularityScore': newScore,
+          'metadata.lastScoreUpdate': new Date(),
+          'metadata.scoreMode': scoreMode
+        });
+        updatedCount++;
+      }
+    }
+    
+    console.log(`✅ Updated ${updatedCount}/${relevantGames.length} games with new popularity scores`);
+
+    // ✅ STEP 2: Aggregation Pipeline - SORTIERT IMMER NACH POPULARITY SCORE
+    const pipeline = [
+      { $match: matchFilter },
+      // ✅ WICHTIG: Sortierung ist IMMER nach popularityScore (absteigend)
+      { 
+        $sort: { 
+          'metadata.popularityScore': -1,        // Hauptsortierung: Popularity Score
+          'stats.totalMinutes': -1,              // Tiebreaker 1: Gesamte Spielzeit
+          'currentActivity.currentPlayers': -1,  // Tiebreaker 2: Aktuelle Spieler
+          'metadata.lastSeen': -1                // Tiebreaker 3: Letzte Aktivität
+        } 
+      },
+      { $limit: parseInt(limit) },
+      {
+        $project: {
+          gameId: 1,
+          gameName: 1,
+          category: 1,
+          stats: 1,
+          currentActivity: 1,
+          metadata: 1,
+          // Berechnete Felder
+          totalHours: { $floor: { $divide: ['$stats.totalMinutes', 60] } },
+          hoursToday: { $floor: { $divide: ['$stats.periods.today.minutes', 60] } },
+          hoursThisWeek: { $floor: { $divide: ['$stats.periods.thisWeek.minutes', 60] } },
+          hoursThisMonth: { $floor: { $divide: ['$stats.periods.thisMonth.minutes', 60] } },
+          isCurrentlyActive: { $gt: ['$currentActivity.currentPlayers', 0] }
+        }
+      }
+    ];
+
+    const topGames = await this.aggregate(pipeline);
+    
+    // ✅ STEP 3: Ergebnis formatieren mit Debug-Info
+    const formattedGames = topGames.map((game, index) => ({
+      id: game.gameId,
+      name: game.gameName,
+      category: game.category,
+      players: game.stats.uniquePlayers,
+      sessions: game.stats.totalSessions,
+      totalHours: game.totalHours,
+      hoursToday: game.hoursToday,
+      hoursThisWeek: game.hoursThisWeek,
+      hoursThisMonth: game.hoursThisMonth,
+      currentPlayers: game.currentActivity.currentPlayers,
+      isActive: game.isCurrentlyActive,
+      
+      // ✅ WICHTIG: Popularity Score und Ranking-Info
+      popularityScore: game.metadata.popularityScore,
+      scoreMode: game.metadata.scoreMode,
+      ranking: index + 1,
+      
+      lastSeen: game.metadata.lastSeen,
+      averageSessionLength: game.stats.averageSessionLength,
+      image: game.metadata.imageUrl || 'https://picsum.photos/300/180',
+      
+      // Zeitraum-spezifische Sessions
+      sessionsToday: game.stats.periods.today.sessions,
+      sessionsThisWeek: game.stats.periods.thisWeek.sessions,
+      sessionsThisMonth: game.stats.periods.thisMonth.sessions,
+      
+      // ✅ DEBUG: Score-Breakdown für Transparenz
+      debug: {
+        scoreMode: scoreMode,
+        timeframeFilter: timeframe,
+        lastScoreUpdate: game.metadata.lastScoreUpdate
+      }
+    }));
+
+    // ✅ STEP 4: Logging für Debugging
+    console.log(`🏆 Top ${limit} Games for '${timeframe}' (${scoreMode} scoring):`);
+    formattedGames.slice(0, 5).forEach((game, index) => {
+      console.log(`   ${index + 1}. ${game.name}: ${game.popularityScore} points (${game.totalHours}h, ${game.players} players, ${game.currentPlayers} playing)`);
+    });
+    
+    return formattedGames;
+  } catch (error) {
+    console.error('Error getting top games:', error);
+    return [];
+  }
+};
+
+// ✅ ENHANCED: Popularity Score Berechnung mit verbesserter Gewichtung
+gameStatsSchema.statics.calculatePopularityScore = function(gameStats, mode = 'balanced') {
   const now = new Date();
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   
-  // Gewichtung verschiedener Faktoren
-  const sessionsWeight = gameStats.stats.totalSessions * 2;
-  const playersWeight = gameStats.stats.uniquePlayers * 5;
-  const hoursWeight = Math.floor(gameStats.stats.totalMinutes / 60) * 1;
-  const recentWeight = (gameStats.metadata.lastSeen > oneWeekAgo) ? 20 : 0;
-  const currentWeight = gameStats.currentActivity.currentPlayers * 50;
-  const weeklyActivityWeight = gameStats.stats.periods.thisWeek.sessions * 3;
+  const totalHours = Math.max(0, Math.floor(gameStats.stats.totalMinutes / 60));
+  const weeklyHours = Math.max(0, Math.floor(gameStats.stats.periods.thisWeek.minutes / 60));
+  const dailyHours = Math.max(0, Math.floor(gameStats.stats.periods.today.minutes / 60));
   
-  return Math.floor(
-    sessionsWeight + 
-    playersWeight + 
-    hoursWeight + 
-    recentWeight + 
-    currentWeight +
-    weeklyActivityWeight
+  const baseMetrics = {
+    totalHours: totalHours,
+    weeklyHours: weeklyHours,
+    dailyHours: dailyHours,
+    uniquePlayers: Math.max(0, gameStats.stats.uniquePlayers || 0),
+    totalSessions: Math.max(0, gameStats.stats.totalSessions || 0),
+    currentPlayers: Math.max(0, gameStats.currentActivity.currentPlayers || 0),
+    isRecent: gameStats.metadata.lastSeen > oneWeekAgo,
+    weeklySessions: Math.max(0, gameStats.stats.periods.thisWeek.sessions || 0),
+    avgSessionLength: Math.max(0, gameStats.stats.averageSessionLength || 0)
+  };
+  
+  let weights;
+  
+  switch (mode) {
+    case 'hours_focused':
+      // Spielzeit dominiert (für "Most Played" / "Popular")
+      weights = {
+        totalHours: 25,      // ✅ Sehr hoch
+        weeklyHours: 20,     // ✅ Hoch
+        dailyHours: 15,      // ✅ Medium
+        uniquePlayers: 8,    // Medium
+        totalSessions: 2,    // Niedrig
+        currentPlayers: 30,  // Hoch (Live-Aktivität wichtig)
+        recentBonus: 50,     // Hoher Bonus für aktive Games
+        weeklySessions: 3    // Niedrig
+      };
+      break;
+      
+    case 'live_focused':
+      // Live-Aktivität dominiert (für "Currently Active")
+      weights = {
+        totalHours: 8,       // Niedrig
+        weeklyHours: 15,     // Medium
+        dailyHours: 20,      // Hoch
+        uniquePlayers: 10,   // Medium
+        totalSessions: 2,    // Niedrig
+        currentPlayers: 60,  // ✅ Sehr hoch
+        recentBonus: 40,     // Hoch
+        weeklySessions: 12   // Medium
+      };
+      break;
+      
+    case 'community_focused':
+      // Community-Engagement dominiert
+      weights = {
+        totalHours: 12,      // Medium
+        weeklyHours: 18,     // Hoch
+        dailyHours: 10,      // Medium
+        uniquePlayers: 20,   // ✅ Sehr hoch
+        totalSessions: 8,    // Medium
+        currentPlayers: 25,  // Hoch
+        recentBonus: 35,     // Hoch
+        weeklySessions: 10   // Medium
+      };
+      break;
+      
+    default: // 'balanced'
+      // Ausgewogene Gewichtung mit Spielzeit-Fokus
+      weights = {
+        totalHours: 18,      // ✅ Hoch
+        weeklyHours: 22,     // ✅ Sehr hoch
+        dailyHours: 12,      // Medium
+        uniquePlayers: 12,   // Medium
+        totalSessions: 3,    // Niedrig
+        currentPlayers: 35,  // Hoch
+        recentBonus: 45,     // Hoch
+        weeklySessions: 5    // Niedrig
+      };
+  }
+  
+  // Basis-Score berechnen
+  const baseScore = Math.floor(
+    baseMetrics.totalHours * weights.totalHours +
+    baseMetrics.weeklyHours * weights.weeklyHours +
+    baseMetrics.dailyHours * weights.dailyHours +
+    baseMetrics.uniquePlayers * weights.uniquePlayers +
+    baseMetrics.totalSessions * weights.totalSessions +
+    baseMetrics.currentPlayers * weights.currentPlayers +
+    (baseMetrics.isRecent ? weights.recentBonus : 0) +
+    baseMetrics.weeklySessions * weights.weeklySessions
   );
+  
+  // ✅ BONUS-SYSTEM
+  let bonuses = 0;
+  
+  // Session-Längen-Bonus (längere Sessions = engagiertere Spieler)
+  if (baseMetrics.avgSessionLength > 30) {
+    bonuses += Math.floor(baseMetrics.avgSessionLength / 10) * 5;
+  }
+  
+  // Konsistenz-Bonus (regelmäßige Aktivität)
+  if (baseMetrics.totalSessions > 20 && baseMetrics.weeklyHours > 5) {
+    bonuses += 30;
+  }
+  
+  // Diversitäts-Bonus (viele verschiedene Spieler)
+  if (baseMetrics.uniquePlayers > 10 && baseMetrics.totalSessions > 30) {
+    bonuses += 25;
+  }
+  
+  // Live-Aktivitäts-Bonus (aktuell aktiv)
+  if (baseMetrics.currentPlayers > 0) {
+    bonuses += Math.min(baseMetrics.currentPlayers * 5, 50); // Max +50
+  }
+  
+  const finalScore = Math.max(0, baseScore + bonuses);
+  
+  // ✅ DEBUG LOGGING (nur bei großen Score-Änderungen)
+  const oldScore = gameStats.metadata.popularityScore || 0;
+  if (Math.abs(finalScore - oldScore) > 50) {
+    console.log(`🎮 ${gameStats.gameName}: Score ${oldScore} → ${finalScore} (${mode})`);
+    console.log(`   Hours: ${baseMetrics.totalHours}h total, ${baseMetrics.weeklyHours}h week, ${baseMetrics.dailyHours}h today`);
+    console.log(`   Players: ${baseMetrics.uniquePlayers} unique, ${baseMetrics.currentPlayers} playing now`);
+    console.log(`   Bonus: ${bonuses} points`);
+  }
+  
+  return finalScore;
+};
+
+// ✅ FIXED: Homepage Games mit garantiert korrekter Sortierung
+gameStatsSchema.statics.getHomepageGames = async function(limit = 6) {
+  try {
+    console.log('🏠 Getting homepage games with popularity scoring...');
+    
+    // Mix aus verschiedenen Kategorien, ALLE nach popularityScore sortiert
+    const [popularGames, activeGames, recentGames] = await Promise.all([
+      this.getTopGames('popular', Math.ceil(limit * 0.4)),    // 40% popular (hours_focused)
+      this.getTopGames('active', Math.ceil(limit * 0.3)),     // 30% active (live_focused)
+      this.getTopGames('week', Math.ceil(limit * 0.3))        // 30% recent (balanced)
+    ]);
+
+    // Kombinieren und nach globalem popularityScore sortieren
+    const combinedGames = [...popularGames];
+    
+    // Hinzufügen ohne Duplikate
+    activeGames.forEach(game => {
+      if (!combinedGames.find(g => g.id === game.id)) {
+        combinedGames.push(game);
+      }
+    });
+    
+    recentGames.forEach(game => {
+      if (!combinedGames.find(g => g.id === game.id)) {
+        combinedGames.push(game);
+      }
+    });
+
+    // ✅ WICHTIG: Final sort nach popularityScore
+    const sortedGames = combinedGames
+      .sort((a, b) => {
+        // Primär: Popularity Score
+        if (b.popularityScore !== a.popularityScore) {
+          return b.popularityScore - a.popularityScore;
+        }
+        // Sekundär: Gesamte Spielzeit
+        if (b.totalHours !== a.totalHours) {
+          return b.totalHours - a.totalHours;
+        }
+        // Tertiär: Aktuelle Spieler
+        return b.currentPlayers - a.currentPlayers;
+      })
+      .slice(0, limit);
+
+    console.log(`🏠 Homepage top ${limit} games:`);
+    sortedGames.forEach((game, index) => {
+      console.log(`   ${index + 1}. ${game.name}: ${game.popularityScore} points (${game.totalHours}h, ${game.currentPlayers} playing)`);
+    });
+
+    return sortedGames;
+  } catch (error) {
+    console.error('Error getting homepage games:', error);
+    return [];
+  }
+};
+
+// ✅ UPDATED: getTopGames mit Score-Modi
+gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit = 10, scoreMode = 'balanced') {
+  try {
+    let sortField = 'metadata.popularityScore';
+    let matchFilter = {};
+
+    // Mindest-Aktivität Filter je nach Zeitraum
+    switch (timeframe) {
+      case 'today':
+        sortField = 'stats.periods.today.sessions';
+        matchFilter['stats.periods.today.sessions'] = { $gte: 1 };
+        scoreMode = 'live_focused'; // Heute = Live-Fokus
+        break;
+      case 'week':
+        sortField = 'stats.periods.thisWeek.sessions';
+        matchFilter['stats.periods.thisWeek.sessions'] = { $gte: 1 };
+        scoreMode = 'balanced'; // Woche = Ausgewogen
+        break;
+      case 'month':
+        sortField = 'stats.periods.thisMonth.sessions';
+        matchFilter['stats.periods.thisMonth.sessions'] = { $gte: 1 };
+        scoreMode = 'hours_focused'; // Monat = Spielzeit-Fokus
+        break;
+      case 'active':
+        sortField = 'currentActivity.currentPlayers';
+        matchFilter['currentActivity.currentPlayers'] = { $gt: 0 };
+        scoreMode = 'live_focused'; // Aktiv = Live-Fokus
+        break;
+      case 'popular':
+        sortField = 'metadata.popularityScore';
+        matchFilter['stats.totalSessions'] = { $gte: 3 };
+        scoreMode = 'hours_focused'; // Popular = Spielzeit-Fokus
+        break;
+      default:
+        sortField = 'stats.totalSessions';
+        matchFilter['stats.totalSessions'] = { $gte: 1 };
+        scoreMode = 'balanced';
+    }
+
+    // ✅ Vor der Aggregation: Popularity Scores für alle Games neu berechnen
+    const allGames = await this.find(matchFilter);
+    
+    for (const game of allGames) {
+      const newScore = this.calculatePopularityScore(game, scoreMode);
+      if (game.metadata.popularityScore !== newScore) {
+        await this.findByIdAndUpdate(game._id, {
+          'metadata.popularityScore': newScore
+        });
+      }
+    }
+
+    const pipeline = [
+      { $match: matchFilter },
+      { $sort: { [sortField]: -1, 'stats.totalMinutes': -1, 'metadata.lastSeen': -1 } },
+      { $limit: parseInt(limit) },
+      {
+        $project: {
+          gameId: 1,
+          gameName: 1,
+          category: 1,
+          stats: 1,
+          currentActivity: 1,
+          metadata: 1,
+          // ✅ Korrekte Stunden-Berechnungen
+          totalHours: { $floor: { $divide: ['$stats.totalMinutes', 60] } },
+          hoursToday: { $floor: { $divide: ['$stats.periods.today.minutes', 60] } },
+          hoursThisWeek: { $floor: { $divide: ['$stats.periods.thisWeek.minutes', 60] } },
+          hoursThisMonth: { $floor: { $divide: ['$stats.periods.thisMonth.minutes', 60] } },
+          isCurrentlyActive: { $gt: ['$currentActivity.currentPlayers', 0] },
+          scoreMode: { $literal: scoreMode } // Debug-Info
+        }
+      }
+    ];
+
+    const topGames = await this.aggregate(pipeline);
+    
+    return topGames.map(game => ({
+      id: game.gameId,
+      name: game.gameName,
+      category: game.category,
+      players: game.stats.uniquePlayers,
+      sessions: game.stats.totalSessions,
+      totalHours: game.totalHours,
+      hoursToday: game.hoursToday,
+      hoursThisWeek: game.hoursThisWeek,
+      hoursThisMonth: game.hoursThisMonth,
+      currentPlayers: game.currentActivity.currentPlayers,
+      isActive: game.isCurrentlyActive,
+      popularityScore: game.metadata.popularityScore,
+      lastSeen: game.metadata.lastSeen,
+      averageSessionLength: game.stats.averageSessionLength,
+      image: game.metadata.imageUrl || 'https://picsum.photos/300/180',
+      // ✅ Zeitraum-spezifische Sessions
+      sessionsToday: game.stats.periods.today.sessions,
+      sessionsThisWeek: game.stats.periods.thisWeek.sessions,
+      sessionsThisMonth: game.stats.periods.thisMonth.sessions,
+      scoreMode: game.scoreMode // Debug-Info welcher Modus verwendet wurde
+    }));
+  } catch (error) {
+    console.error('Error getting top games:', error);
+    return [];
+  }
 };
 
 // ✅ ENHANCED: Verbesserte Top-Games Methode
@@ -438,7 +859,7 @@ gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit =
       popularityScore: game.metadata.popularityScore,
       lastSeen: game.metadata.lastSeen,
       averageSessionLength: game.stats.averageSessionLength,
-      image: game.metadata.imageUrl || 'https://via.placeholder.com/300x180',
+      image: game.metadata.imageUrl || 'https://picsum.photos/300/180',
       // ✅ Zeitraum-spezifische Sessions
       sessionsToday: game.stats.periods.today.sessions,
       sessionsThisWeek: game.stats.periods.thisWeek.sessions,
