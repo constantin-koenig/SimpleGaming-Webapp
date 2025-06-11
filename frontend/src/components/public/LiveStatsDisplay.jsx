@@ -1,8 +1,10 @@
 // frontend/src/components/public/LiveStatsDisplay.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAnimatedCounter } from '../../hooks/useServerStats';
 
 const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
+  const [countdown, setCountdown] = useState(60);
+
   const onlineCount = useAnimatedCounter(
     liveStats.onlineMembers, 
     1500, 
@@ -18,6 +20,18 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
     1500, 
     isVisible && liveStats.currentlyPlaying >= 0
   );
+
+  // Countdown für nächstes Update
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const nextUpdate = Math.ceil(now / 60000) * 60000; // Nächste volle Minute
+      const secondsUntilUpdate = Math.floor((nextUpdate - now) / 1000);
+      setCountdown(secondsUntilUpdate);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className={`transform transition-all duration-1000 ${
@@ -39,7 +53,7 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
         
         {liveStats.timestamp && (
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Aktualisiert: {liveStats.timestamp.toLocaleTimeString('de-DE')}
+            Aktualisiert: {liveStats.timestamp.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
           </div>
         )}
       </div>
@@ -131,7 +145,7 @@ const LiveStatsDisplay = ({ liveStats, baseStats, isVisible }) => {
       {/* Performance Info (nur für Debug/Admins) */}
       {liveStats.performance && process.env.NODE_ENV === 'development' && (
         <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-          Nächstes Update in: {Math.floor((60000 - (Date.now() % 60000)) / 1000)}s
+          Nächstes Update in: {countdown}s
         </div>
       )}
     </div>
