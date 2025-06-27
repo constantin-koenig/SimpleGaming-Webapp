@@ -1,8 +1,13 @@
-// frontend/src/components/public/GameCard.jsx - ENHANCED mit einmaliger Shimmer-Animation
+// frontend/src/components/public/GameCard.jsx - VEREINFACHT (Backend löst Platzhalterbild)
 import React, { useState, useEffect } from 'react';
+
+// Import des Platzhalterbildes für lokale Fallbacks
+import gamePlaceholder from '../../assets/images/game-placeholder.png';
 
 const GameCard = ({ game, delay = 0, isVisible }) => {
   const [shimmerShown, setShimmerShown] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
 
   // Formatiere die Zahlen für bessere Anzeige
   const formatNumber = (num) => {
@@ -28,7 +33,7 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
     } else if (game.sessions > 100) {
       return 'bg-purple-500'; // Etabliert
     }
-    return 'bg-gray-500'; // Standard
+    return 'bg-red-500'; // Standard
   };
 
   const getBadgeText = () => {
@@ -50,8 +55,25 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
     return 'Keine Session-Daten';
   };
 
-  // Platzhalter-Bild Generator
-  
+  // ✅ VEREINFACHT: Backend sendet bereits das richtige Bild
+  const getImageSource = () => {
+    // Fallback nur bei Ladefehlern (nicht bei Backend-Platzhaltern)
+    if (imageError) {
+      return gamePlaceholder;
+    }
+    return game.image;
+  };
+
+  // Handler für Bildfehler (nur echte Ladefehler)
+  const handleImageError = () => {
+    console.log(`Image load error for game "${game.title}" with URL: ${game.image}`);
+    setImageError(true);
+    setImageLoading(false);
+  };
+
+  const handleImageLoad = () => {
+    setImageLoading(false);
+  };
 
   // Shimmer-Effekt nur einmal beim ersten Anzeigen
   useEffect(() => {
@@ -59,6 +81,7 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
       setShimmerShown(true);
     }
   }, [isVisible, shimmerShown]);
+
 
   return (
     <div 
@@ -70,20 +93,40 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
       <div className="bg-light-bg-primary dark:bg-dark-bg-primary rounded-xl overflow-hidden shadow-lg hover:shadow-2xl border border-light-border-primary dark:border-dark-border-primary">
         {/* Game Image mit Live-Indikator */}
         <div className="relative">
-          <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
+          <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center overflow-hidden">
+            {/* Loading Indicator */}
+            {imageLoading && !imageError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+              </div>
+            )}
+            
             <img 
-              src={game.image} 
+              src={getImageSource()}
               alt={game.title || game.name}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                imageLoading ? 'opacity-0' : 'opacity-100'
+              }`}
               loading="lazy"
+              onError={handleImageError}
+              onLoad={handleImageLoad}
             />
           </div>
-          
+
+          {/* Live-Indicator */}
+          {game.isActive && game.currentPlayers > 0 && (
+            <div className="absolute top-3 left-3">
+              <div className="flex items-center space-x-2 bg-green-500 bg-opacity-90 text-white px-2 py-1 rounded-full text-xs font-medium">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                <span>{game.currentPlayers} online</span>
+              </div>
+            </div>
+          )}
 
           {/* Kategorie-Badge */}
           <div className="absolute top-3 right-3">
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-black bg-opacity-50 text-white">
-              {game.category}
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${getBadgeColor()}`}>
+              {getBadgeText()}
             </span>
           </div>
 
@@ -129,33 +172,29 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
                 Gesamte Spielzeit:
               </span>
               <span className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                {formatHours(game.totalHours || Math.floor((game.totalMinutes || 0) / 60))}h
+                {formatHours(game.totalHours || 0)}h
               </span>
             </div>
-
-            {/* Spielzeit diese Woche */}
-            {(game.hoursThisWeek !== undefined || game.minutesThisWeek !== undefined) && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                  Diese Woche:
-                </span>
-                <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                  {formatHours(game.hoursThisWeek || Math.floor((game.minutesThisWeek || 0) / 60))}h
-                </span>
-              </div>
-            )}
-
-            {/* Durchschnittliche Session-Länge */}
-            {game.averageSessionLength && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                  Ø Session:
-                </span>
-                <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
-                  {game.averageSessionLength}min
-                </span>
-              </div>
-            )}
+            
+            {/* Diese Woche */}
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                Diese Woche:
+              </span>
+              <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                {formatHours(game.hoursThisWeek || 0)}h
+              </span>
+            </div>
+            
+            {/* Session-Info mit Tooltip */}
+            <div className="flex justify-between items-center" title={getSessionInfo()}>
+              <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                Ø Session:
+              </span>
+              <span className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                {game.averageSessionLength || 0}min
+              </span>
+            </div>
           </div>
 
           {/* Live-Status oder letzte Aktivität */}
@@ -188,7 +227,7 @@ const GameCard = ({ game, delay = 0, isVisible }) => {
                 </span>
               </div>
             )}
-          </div>
+            </div>
         </div>
       </div>
     </div>

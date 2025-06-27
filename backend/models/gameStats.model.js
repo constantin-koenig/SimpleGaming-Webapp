@@ -470,7 +470,7 @@ gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit =
       
       lastSeen: game.metadata.lastSeen,
       averageSessionLength: game.stats.averageSessionLength,
-      image: game.metadata.imageUrl || 'https://picsum.photos/300/180',
+      image: game.metadata.imageUrl || '/src/assets/images/game-placeholder.png',
       
       // Zeitraum-spezifische Sessions
       sessionsToday: game.stats.periods.today.sessions,
@@ -774,7 +774,7 @@ gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit =
       popularityScore: game.metadata.popularityScore,
       lastSeen: game.metadata.lastSeen,
       averageSessionLength: game.stats.averageSessionLength,
-      image: game.metadata.imageUrl || 'https://picsum.photos/300/180',
+      image: game.metadata.imageUrl || '/src/assets/images/game-placeholder.png',
       // ✅ Zeitraum-spezifische Sessions
       sessionsToday: game.stats.periods.today.sessions,
       sessionsThisWeek: game.stats.periods.thisWeek.sessions,
@@ -859,7 +859,7 @@ gameStatsSchema.statics.getTopGames = async function(timeframe = 'week', limit =
       popularityScore: game.metadata.popularityScore,
       lastSeen: game.metadata.lastSeen,
       averageSessionLength: game.stats.averageSessionLength,
-      image: game.metadata.imageUrl || 'https://picsum.photos/300/180',
+      image: game.metadata.imageUrl || '/src/assets/images/game-placeholder.png',
       // ✅ Zeitraum-spezifische Sessions
       sessionsToday: game.stats.periods.today.sessions,
       sessionsThisWeek: game.stats.periods.thisWeek.sessions,

@@ -5,6 +5,8 @@ const ServerStats = require('../models/serverStats.model');
 const GameStats = require('../models/gameStats.model');
 const VoiceSession = require('../models/voiceSession.model');
 const User = require('../models/user.model');
+const GAME_PLACEHOLDER_PATH = '/src/assets/game-placeholder.png';
+
 
 // Öffentliche Homepage-Statistiken (gecacht) mit echten Daten
 router.get('/stats', async (req, res) => {
@@ -149,7 +151,7 @@ router.get('/stats/live', async (req, res) => {
   }
 });
 
-// Popular Games Endpoint (unverändert)
+// Popular Games Endpoint - FIXED
 router.get('/games/popular', async (req, res) => {
   try {
     const { timeframe = 'week', limit = 6 } = req.query;
@@ -159,7 +161,8 @@ router.get('/games/popular', async (req, res) => {
     const formattedGames = popularGames.map((game, index) => ({
       id: game.id || index + 1,
       title: game.name,
-      image: game.image || 'https://via.placeholder.com/300x180',
+      // ✅ FIXED: Verwende Frontend-Platzhalterbild statt externes Placeholder
+      image: game.image || GAME_PLACEHOLDER_PATH,
       players: game.players,
       sessions: game.sessions,
       totalHours: game.totalHours,
@@ -176,7 +179,8 @@ router.get('/games/popular', async (req, res) => {
         {
           id: 1,
           title: 'Minecraft',
-          image: 'https://via.placeholder.com/300x180',
+          // ✅ FIXED: Auch Fallback-Games verwenden Frontend-Platzhalterbild
+          image: GAME_PLACEHOLDER_PATH,
           players: 45,
           sessions: 127,
           totalHours: 892,
@@ -190,7 +194,7 @@ router.get('/games/popular', async (req, res) => {
         {
           id: 2,
           title: 'Fortnite',
-          image: 'https://via.placeholder.com/300x180',
+          image: GAME_PLACEHOLDER_PATH,
           players: 38,
           sessions: 95,
           totalHours: 567,
@@ -204,7 +208,7 @@ router.get('/games/popular', async (req, res) => {
         {
           id: 3,
           title: 'Call of Duty: Warzone',
-          image: 'https://via.placeholder.com/300x180',
+          image: GAME_PLACEHOLDER_PATH,
           players: 31,
           sessions: 78,
           totalHours: 445,
@@ -218,7 +222,7 @@ router.get('/games/popular', async (req, res) => {
         {
           id: 4,
           title: 'League of Legends',
-          image: 'https://via.placeholder.com/300x180',
+          image: GAME_PLACEHOLDER_PATH,
           players: 27,
           sessions: 89,
           totalHours: 723,
