@@ -12,7 +12,9 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const statsRoutes = require('./routes/stats.routes');
 const botRoutes = require('./routes/bot.routes');
-const homepageRoutes = require('./routes/homepage.routes'); // NEU
+const homepageRoutes = require('./routes/homepage.routes'); 
+const dashboardRoutes = require('./routes/dashboard.routes');
+
 
 // Umgebungsvariablen laden
 require('dotenv').config();
@@ -54,7 +56,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/bot', botRoutes);
-app.use('/api/homepage', homepageRoutes); // NEU - Homepage Stats
+app.use('/api/homepage', homepageRoutes); 
+app.use('/api/dashboard', dashboardRoutes);
 
 // Bot Status Endpoint (Legacy Support)
 app.get('/api/bot/status', (req, res) => {

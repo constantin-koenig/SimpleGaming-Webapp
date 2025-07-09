@@ -1,6 +1,6 @@
 import React from 'react';
 
-const LevelProgress = ({ user, themeClasses }) => {
+const LevelProgress = ({ user, themeClasses, isDarkMode }) => {
   const xpProgress = (user.xp / user.xpToNext) * 100;
 
   return (

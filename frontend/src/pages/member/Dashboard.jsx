@@ -1,27 +1,17 @@
+// ===== components/Dashboard.jsx (UPDATED - Nur Activity Overview) =====
 import React, { useState } from 'react';
+import { useDashboardData } from '../../hooks/useDashboardData';
 
 // Component Imports
 import Navigation from '../../components/dashboard/Navigation';
 import LevelProgress from '../../components/dashboard/LevelProgress';
 import StatsCards from '../../components/dashboard/StatsCards';
-import GameActivity from '../../components/dashboard/GameActivity';
+import ActivityOverview from '../../components/dashboard/ActivityOverview';
 import Achievements from '../../components/dashboard/Achievements';
 import RegisteredEvents from '../../components/dashboard/RegisteredEvents';
 import BuddyRequests from '../../components/dashboard/BuddyRequests';
 import FriendsList from '../../components/dashboard/FriendsList';
 import QuickActions from '../../components/dashboard/QuickActions';
-
-// Data Imports (könnte später aus API kommen)
-import { 
-  userData, 
-  dashboardStatsData, 
-  gameActivityData, 
-  recentGamingActivityData,
-  achievementsData,
-  registeredEventsData,
-  buddyRequestsData,
-  friendsData 
-} from '../data/dashboardData';
 
 const Dashboard = () => {
   // Theme State
@@ -30,8 +20,22 @@ const Dashboard = () => {
   // Navigation State
   const [activeNavItem, setActiveNavItem] = useState('dashboard');
   
-  // Activity Filter State
+  // Activity States
   const [activityFilter, setActivityFilter] = useState('weekly');
+
+  // API Data Hook
+  const { 
+    data, 
+    loading, 
+    error, 
+    refetch, 
+    updateGameActivity,
+    acceptBuddyRequest,
+    rejectBuddyRequest,
+    cancelEventRegistration,
+    sendFriendMessage,
+    inviteFriendToGame
+  } = useDashboardData();
 
   // Theme classes
   const themeClasses = {
@@ -45,6 +49,46 @@ const Dashboard = () => {
     navBorder: isDarkMode ? 'border-gray-700' : 'border-gray-200'
   };
 
+  // Handle activity filter change
+  const handleActivityFilterChange = async (newFilter) => {
+    setActivityFilter(newFilter);
+    
+    // Update activity-related data if needed
+    if (newFilter === 'daily') {
+      // Could trigger specific daily data updates
+    }
+  };
+
+  // Loading State
+  if (loading) {
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} flex items-center justify-center`}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
+          <p className={`mt-4 text-lg ${themeClasses.text}`}>Dashboard wird geladen...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error State
+  if (error && !data.userData) {
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} flex items-center justify-center`}>
+        <div className="text-center">
+          <p className="text-red-500 text-lg mb-4">Fehler beim Laden des Dashboards:</p>
+          <p className={`text-sm ${themeClasses.textSecondary} mb-4`}>{error}</p>
+          <button 
+            onClick={refetch}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Erneut versuchen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen ${themeClasses.bg} transition-colors duration-300`}>
       {/* Navigation */}
@@ -53,7 +97,7 @@ const Dashboard = () => {
         setActiveNavItem={setActiveNavItem}
         isDarkMode={isDarkMode}
         setIsDarkMode={setIsDarkMode}
-        user={userData}
+        user={data.userData}
         themeClasses={themeClasses}
       />
 
@@ -62,7 +106,7 @@ const Dashboard = () => {
         {/* Level Progress */}
         <div className="mb-8">
           <LevelProgress 
-            user={userData}
+            user={data.userData}
             themeClasses={themeClasses}
             isDarkMode={isDarkMode}
           />
@@ -70,51 +114,55 @@ const Dashboard = () => {
 
         {/* Main Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Linke Spalte */}
+          {/* Linke Spalte - 2/3 der Breite */}
           <div className="lg:col-span-2 space-y-6">
             {/* Statistik-Karten */}
             <StatsCards 
-              dashboardStats={dashboardStatsData}
+              dashboardStats={data.dashboardStats}
               themeClasses={themeClasses}
             />
 
-            {/* Gaming-Aktivität */}
-            <GameActivity 
+            {/* Activity Overview - Nur noch diese eine Component */}
+            <ActivityOverview
               activityFilter={activityFilter}
-              setActivityFilter={setActivityFilter}
-              gameActivity={gameActivityData}
-              recentGamingActivity={recentGamingActivityData}
+              setActivityFilter={handleActivityFilterChange}
+              activityData={data.combinedActivity} // Würde aus API kommen
               themeClasses={themeClasses}
               isDarkMode={isDarkMode}
             />
 
             {/* Erfolge */}
             <Achievements 
-              achievements={achievementsData}
+              achievements={data.achievements}
               themeClasses={themeClasses}
               isDarkMode={isDarkMode}
             />
           </div>
 
-          {/* Rechte Spalte */}
+          {/* Rechte Spalte - 1/3 der Breite */}
           <div className="space-y-6">
             {/* Angemeldete Events */}
             <RegisteredEvents 
-              registeredEvents={registeredEventsData}
+              registeredEvents={data.registeredEvents}
+              onCancelRegistration={cancelEventRegistration}
               themeClasses={themeClasses}
               isDarkMode={isDarkMode}
             />
 
             {/* Gaming Buddy Anfragen */}
             <BuddyRequests 
-              buddyRequests={buddyRequestsData}
+              buddyRequests={data.buddyRequests}
+              onAcceptRequest={acceptBuddyRequest}
+              onRejectRequest={rejectBuddyRequest}
               themeClasses={themeClasses}
               isDarkMode={isDarkMode}
             />
 
             {/* Freunde */}
             <FriendsList 
-              friends={friendsData}
+              friends={data.friends}
+              onSendMessage={sendFriendMessage}
+              onInviteToGame={inviteFriendToGame}
               themeClasses={themeClasses}
               isDarkMode={isDarkMode}
             />
