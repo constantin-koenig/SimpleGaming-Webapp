@@ -1,6 +1,6 @@
 // ===== components/dashboard/DatePicker.jsx =====
 import React, { useState } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const DatePicker = ({ 
   activityFilter, 
@@ -24,14 +24,6 @@ const DatePicker = ({
 
   const getFirstDayOfMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
-
-  const formatDate = (date) => {
-    return date.toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
   };
 
   const formatMonth = (date) => {
@@ -93,12 +85,6 @@ const DatePicker = ({
   };
 
   // Quick-Select Funktionen
-  const selectToday = () => {
-    setSelectedDate(today);
-    setActivityFilter('daily');
-    setIsCalendarOpen(false);
-  };
-
   const selectThisWeek = () => {
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Montag
@@ -111,13 +97,6 @@ const DatePicker = ({
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     setSelectedDate(startOfMonth);
     setActivityFilter('monthly');
-    setIsCalendarOpen(false);
-  };
-
-  // Datum auswählen
-  const selectDate = (day) => {
-    const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-    setSelectedDate(newDate);
     setIsCalendarOpen(false);
   };
 
@@ -136,115 +115,44 @@ const DatePicker = ({
     setIsCalendarOpen(false);
   };
 
-  // Render verschiedene Kalender-Views
-  const renderDailyCalendar = () => {
-    const daysInMonth = getDaysInMonth(currentMonth);
-    const firstDay = getFirstDayOfMonth(currentMonth);
-    const days = [];
-
-    // Leere Tage am Anfang
-    for (let i = 0; i < (firstDay === 0 ? 6 : firstDay - 1); i++) {
-      days.push(<div key={`empty-${i}`} className="h-8"></div>);
-    }
-
-    // Tage des Monats
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-      const isSelected = selectedDate && 
-        date.toDateString() === selectedDate.toDateString();
-      const isToday = date.toDateString() === today.toDateString();
-
-      days.push(
-        <button
-          key={day}
-          onClick={() => selectDate(day)}
-          className={`h-8 w-8 rounded text-sm font-medium transition-all duration-200 ${
-            isSelected
-              ? 'bg-blue-500 text-white shadow-md'
-              : isToday
-              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-              : `hover:bg-gray-100 dark:hover:bg-gray-700 ${themeClasses.text}`
-          }`}
-        >
-          {day}
-        </button>
-      );
-    }
-
-    return (
-      <div>
-        {/* Calendar Header */}
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => navigateMonth(-1)}
-            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <h3 className={`font-semibold ${themeClasses.text}`}>
-            {formatMonth(currentMonth)}
-          </h3>
-          <button
-            onClick={() => navigateMonth(1)}
-            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Weekday Headers */}
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((day) => (
-            <div key={day} className={`text-center text-xs font-medium ${themeClasses.textSecondary} py-2`}>
-              {day}
-            </div>
-          ))}
-        </div>
-
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {days}
-        </div>
-      </div>
-    );
-  };
-
+  // Render Wöchentlicher Kalender
   const renderWeeklyCalendar = () => {
     const weeks = getWeeksInYear(currentYear);
-    const currentWeek = selectedDate ? getWeekNumber(selectedDate) : getWeekNumber(today);
-
+    const currentWeek = getWeekNumber(selectedDate || today);
+    
     return (
       <div>
-        {/* Year Header */}
+        {/* Jahr Navigation */}
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => navigateYear(-1)}
-            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+            className={`p-2 rounded-lg ${themeClasses.textSecondary} hover:${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <h3 className={`font-semibold ${themeClasses.text}`}>
-            {currentYear}
-          </h3>
+          <h3 className={`font-semibold ${themeClasses.text}`}>{currentYear}</h3>
           <button
             onClick={() => navigateYear(1)}
-            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+            className={`p-2 rounded-lg ${themeClasses.textSecondary} hover:${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Weeks Grid */}
-        <div className="grid grid-cols-4 gap-2 max-h-80 overflow-y-auto">
+        {/* Wochen Grid */}
+        <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
           {weeks.map((week) => {
-            const isSelected = selectedDate && getWeekNumber(selectedDate) === week.number;
-            const isCurrentWeek = getWeekNumber(today) === week.number && today.getFullYear() === currentYear;
-
+            const isSelected = selectedDate && 
+              getWeekNumber(selectedDate) === week.number && 
+              selectedDate.getFullYear() === currentYear;
+            const isCurrentWeek = week.number === getWeekNumber(today) && 
+              currentYear === today.getFullYear();
+            
             return (
               <button
                 key={week.number}
                 onClick={() => selectWeek(week)}
-                className={`p-3 rounded-lg text-left transition-all duration-200 ${
+                className={`p-2 rounded text-sm font-medium transition-all duration-200 ${
                   isSelected
                     ? 'bg-blue-500 text-white shadow-md'
                     : isCurrentWeek
@@ -252,8 +160,8 @@ const DatePicker = ({
                     : `hover:bg-gray-100 dark:hover:bg-gray-700 ${themeClasses.text}`
                 }`}
               >
-                <div className="font-medium text-sm">{week.label}</div>
-                <div className={`text-xs ${isSelected ? 'text-blue-100' : themeClasses.textTertiary}`}>
+                <div className="font-medium">{week.label}</div>
+                <div className={`text-xs mt-1 ${isSelected ? 'text-blue-100' : themeClasses.textTertiary}`}>
                   {week.dateRange}
                 </div>
               </button>
@@ -264,49 +172,48 @@ const DatePicker = ({
     );
   };
 
+  // Render Monatlicher Kalender
   const renderMonthlyCalendar = () => {
     const months = [
       'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
       'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
     ];
-
+    
     const currentMonth = selectedDate ? selectedDate.getMonth() : today.getMonth();
-    const todayMonth = today.getMonth();
-
+    
     return (
       <div>
-        {/* Year Header */}
+        {/* Jahr Navigation */}
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => navigateYear(-1)}
-            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+            className={`p-2 rounded-lg ${themeClasses.textSecondary} hover:${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <h3 className={`font-semibold ${themeClasses.text}`}>
-            {currentYear}
-          </h3>
+          <h3 className={`font-semibold ${themeClasses.text}`}>{currentYear}</h3>
           <button
             onClick={() => navigateYear(1)}
-            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+            className={`p-2 rounded-lg ${themeClasses.textSecondary} hover:${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Months Grid */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Monate Grid */}
+        <div className="grid grid-cols-3 gap-2">
           {months.map((month, index) => {
             const isSelected = selectedDate && 
               selectedDate.getMonth() === index && 
               selectedDate.getFullYear() === currentYear;
-            const isCurrentMonth = todayMonth === index && today.getFullYear() === currentYear;
-
+            const isCurrentMonth = index === today.getMonth() && 
+              currentYear === today.getFullYear();
+            
             return (
               <button
                 key={month}
                 onClick={() => selectMonth(index)}
-                className={`p-4 rounded-lg text-center transition-all duration-200 ${
+                className={`p-3 rounded text-sm font-medium transition-all duration-200 ${
                   isSelected
                     ? 'bg-blue-500 text-white shadow-md'
                     : isCurrentMonth
@@ -329,14 +236,12 @@ const DatePicker = ({
   // Bestimme welcher Kalender angezeigt werden soll
   const renderCalendar = () => {
     switch (activityFilter) {
-      case 'daily':
-        return renderDailyCalendar();
       case 'weekly':
         return renderWeeklyCalendar();
       case 'monthly':
         return renderMonthlyCalendar();
       default:
-        return renderDailyCalendar();
+        return renderWeeklyCalendar();
     }
   };
 
@@ -344,10 +249,9 @@ const DatePicker = ({
     <div className="relative">
       {/* Date Range Selector */}
       <div className="flex items-center space-x-3 mb-4">
-        {/* Filter Buttons */}
+        {/* Filter Buttons - ohne Daily */}
         <div className="flex items-center space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
           {[
-            { key: 'daily', label: 'Tag', icon: Clock },
             { key: 'weekly', label: 'Woche', icon: Calendar },
             { key: 'monthly', label: 'Monat', icon: Calendar },
             { key: 'alltime', label: 'Allzeit', icon: Calendar }
@@ -380,12 +284,10 @@ const DatePicker = ({
               <Calendar className="w-4 h-4 text-blue-500" />
               <span className={`text-sm font-medium ${themeClasses.text}`}>
                 {selectedDate ? (
-                  activityFilter === 'daily' ? formatDate(selectedDate) :
                   activityFilter === 'weekly' ? `KW ${getWeekNumber(selectedDate)} ${selectedDate.getFullYear()}` :
                   activityFilter === 'monthly' ? formatMonth(selectedDate) :
                   'Allzeit'
                 ) : (
-                  activityFilter === 'daily' ? 'Heute' :
                   activityFilter === 'weekly' ? 'Diese Woche' :
                   activityFilter === 'monthly' ? 'Dieser Monat' :
                   'Allzeit'
@@ -395,12 +297,6 @@ const DatePicker = ({
 
             {/* Quick Select Buttons */}
             <div className="flex items-center space-x-1">
-              <button
-                onClick={selectToday}
-                className={`px-3 py-2 text-xs rounded-lg ${themeClasses.cardBg} ${themeClasses.cardBorder} border hover:border-blue-300 ${themeClasses.textSecondary} hover:${themeClasses.text} transition-colors`}
-              >
-                Heute
-              </button>
               <button
                 onClick={selectThisWeek}
                 className={`px-3 py-2 text-xs rounded-lg ${themeClasses.cardBg} ${themeClasses.cardBorder} border hover:border-blue-300 ${themeClasses.textSecondary} hover:${themeClasses.text} transition-colors`}
@@ -428,15 +324,11 @@ const DatePicker = ({
             <div className="flex items-center justify-between">
               <button
                 onClick={
-                  activityFilter === 'daily' ? selectToday :
-                  activityFilter === 'weekly' ? selectThisWeek :
-                  selectThisMonth
+                  activityFilter === 'weekly' ? selectThisWeek : selectThisMonth
                 }
                 className="text-sm text-blue-500 hover:text-blue-600 font-medium"
               >
-                {activityFilter === 'daily' ? 'Heute' :
-                 activityFilter === 'weekly' ? 'Diese Woche' :
-                 'Dieser Monat'} auswählen
+                {activityFilter === 'weekly' ? 'Diese Woche' : 'Dieser Monat'} auswählen
               </button>
               <button
                 onClick={() => setIsCalendarOpen(false)}
@@ -453,4 +345,3 @@ const DatePicker = ({
 };
 
 export default DatePicker;
-
