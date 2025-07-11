@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
-import api from '../services/api'; // Bestehender API-Service
+// frontend/src/hooks/useDashboardData.js - UPDATED: Mit Datums-Navigation
+import { useState, useEffect, useCallback } from 'react';
+import api from '../services/api';
 
 export const useDashboardData = () => {
   const [data, setData] = useState({
     userData: null,
     dashboardStats: null,
-    gameActivity: null,
+    activityData: null,
+    gamingActivity: null,
     recentGamingActivity: null,
     registeredEvents: null,
     buddyRequests: null,
@@ -15,457 +17,308 @@ export const useDashboardData = () => {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activityLoading, setActivityLoading] = useState(false);
 
-  // Dashboard Overview (User + Stats)
-  const fetchDashboardOverview = async () => {
+  // ✅ NEW: Aktuell ausgewählte Woche/Monat
+  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
+
+  // Dashboard Overview (Basis-Daten)
+  const fetchDashboardOverview = useCallback(async () => {
     try {
       const response = await api.get('/dashboard/overview');
-      return response.data;
+      return response.data.data;
     } catch (error) {
       console.error('Error fetching dashboard overview:', error);
       throw error;
     }
-  };
+  }, []);
 
-  // Gaming Activity
-  const fetchGamingActivity = async (timeframe = 'weekly') => {
+  // ✅ UPDATED: Activity Overview mit optionalen Datums-Parametern
+  const fetchActivityOverview = useCallback(async (timeframe = 'weekly', weekDate = null, monthDate = null) => {
     try {
-      const response = await api.get(`/dashboard/gaming-activity?timeframe=${timeframe}`);
-      return response.data;
+      setActivityLoading(true);
+      
+      // API-Parameter aufbauen
+      let params = `timeframe=${timeframe}`;
+      if (timeframe === 'weekly' && weekDate) {
+        params += `&weekDate=${weekDate.toISOString()}`;
+      }
+      if (timeframe === 'monthly' && monthDate) {
+        params += `&monthDate=${monthDate.toISOString()}`;
+      }
+      
+      console.log(`🔄 Fetching activity data: ${params}`);
+      const response = await api.get(`/dashboard/activity/overview?${params}`);
+      return response.data.data;
     } catch (error) {
-      console.error('Error fetching gaming activity:', error);
+      console.error('Error fetching activity overview:', error);
+      throw error;
+    } finally {
+      setActivityLoading(false);
+    }
+  }, []);
+
+  // Social-bezogene Daten
+  const fetchSocialData = useCallback(async () => {
+    try {
+      const [friends, buddyRequests, registeredEvents] = await Promise.all([
+        api.get('/dashboard/social/friends'),
+        api.get('/dashboard/social/buddy-requests'),
+        api.get('/dashboard/social/events/registered')
+      ]);
+
+      return {
+        friends: friends.data.data,
+        buddyRequests: buddyRequests.data.data,
+        registeredEvents: registeredEvents.data.data
+      };
+    } catch (error) {
+      console.error('Error fetching social data:', error);
       throw error;
     }
-  };
+  }, []);
 
-  // Registered Events
-  const fetchRegisteredEvents = async () => {
-    try {
-      const response = await api.get('/dashboard/events/registered');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching registered events:', error);
-      throw error;
-    }
-  };
-
-  // Buddy Requests
-  const fetchBuddyRequests = async () => {
-    try {
-      const response = await api.get('/dashboard/buddy-requests');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching buddy requests:', error);
-      throw error;
-    }
-  };
-
-  // Friends List
-  const fetchFriends = async () => {
-    try {
-      const response = await api.get('/dashboard/friends');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching friends:', error);
-      throw error;
-    }
-  };
-
-  // Achievements
-  const fetchAchievements = async () => {
-    try {
-      const response = await api.get('/dashboard/achievements');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching achievements:', error);
-      throw error;
-    }
-  };
-
-  // Fallback zu Mock-Daten wenn API nicht verfügbar
-  const getMockData = () => {
-    return {
-      userData: {
-        username: "GamerPro2024",
-        avatar: "/api/placeholder/64/64",
-        level: 42,
-        xp: 15750,
-        xpToNext: 18000,
-        rank: "Diamond",
-        rankColor: "from-blue-400 to-purple-500",
-        joinDate: "2023-03-15",
-        lastActive: new Date().toISOString()
-      },
-      dashboardStats: {
-        totalMessages: 2847,
-        voiceHours: 156,
-        gamesPlayed: 89,
-        eventsAttended: 23,
-        achievementsUnlocked: 31,
-        friendsOnline: 12,
-        weeklyProgress: {
-          messages: 340,
-          voiceTime: 28,
-          gamesPlayed: 15
-        }
-      },
-      gameActivity: {
-        weekly: [
-          { 
-            label: 'Mo', 
-            games: [
-              { name: 'Valorant', playtime: 180, color: '#FF4655' },
-              { name: 'CS2', playtime: 120, color: '#F7931E' },
-              { name: 'Minecraft', playtime: 90, color: '#62B47A' }
-            ]
-          },
-          { 
-            label: 'Di', 
-            games: [
-              { name: 'CS2', playtime: 240, color: '#F7931E' },
-              { name: 'Rust', playtime: 150, color: '#CE422B' },
-              { name: 'Valorant', playtime: 60, color: '#FF4655' }
-            ]
-          },
-          { 
-            label: 'Mi', 
-            games: [
-              { name: 'Minecraft', playtime: 300, color: '#62B47A' },
-              { name: 'Valorant', playtime: 120, color: '#FF4655' }
-            ]
-          },
-          { 
-            label: 'Do', 
-            games: [
-              { name: 'Valorant', playtime: 210, color: '#FF4655' },
-              { name: 'CS2', playtime: 180, color: '#F7931E' },
-              { name: 'Rust', playtime: 90, color: '#CE422B' }
-            ]
-          },
-          { 
-            label: 'Fr', 
-            games: [
-              { name: 'CS2', playtime: 360, color: '#F7931E' },
-              { name: 'Valorant', playtime: 150, color: '#FF4655' }
-            ]
-          },
-          { 
-            label: 'Sa', 
-            games: [
-              { name: 'Minecraft', playtime: 420, color: '#62B47A' },
-              { name: 'Rust', playtime: 240, color: '#CE422B' },
-              { name: 'Valorant', playtime: 90, color: '#FF4655' }
-            ]
-          },
-          { 
-            label: 'So', 
-            games: [
-              { name: 'Valorant', playtime: 270, color: '#FF4655' },
-              { name: 'CS2', playtime: 180, color: '#F7931E' },
-              { name: 'Minecraft', playtime: 120, color: '#62B47A' }
-            ]
-          }
-        ]
-      },
-      recentGamingActivity: [
-        {
-          game: 'Valorant',
-          lastPlayed: '2024-06-28T14:30:00Z',
-          duration: 120,
-          status: 'completed',
-          icon: '🎯',
-          color: '#FF4655'
-        },
-        {
-          game: 'CS2',
-          lastPlayed: '2024-06-28T11:15:00Z',
-          duration: 85,
-          status: 'completed',
-          icon: '💥',
-          color: '#F7931E'
-        },
-        {
-          game: 'Minecraft',
-          lastPlayed: '2024-06-27T20:45:00Z',
-          duration: 180,
-          status: 'completed',
-          icon: '⛏️',
-          color: '#62B47A'
-        },
-        {
-          game: 'Rust',
-          lastPlayed: '2024-06-27T16:20:00Z',
-          duration: 95,
-          status: 'completed',
-          icon: '🔥',
-          color: '#CE422B'
-        }
-      ],
-      registeredEvents: [
-        { 
-          id: 1, 
-          name: "Minecraft Build Contest", 
-          date: "2024-06-30", 
-          time: "20:00", 
-          participants: 24,
-          status: "registered",
-          canCancel: true
-        },
-        { 
-          id: 2, 
-          name: "CS2 Tournament", 
-          date: "2024-07-02", 
-          time: "19:30", 
-          participants: 16,
-          status: "registered",
-          canCancel: false
-        }
-      ],
-      buddyRequests: [
-        {
-          id: 1,
-          username: "ShadowGamer",
-          avatar: "/api/placeholder/40/40",
-          games: ["Valorant", "CS2"],
-          mutual: 3,
-          requestDate: "2024-06-25"
-        },
-        {
-          id: 2,
-          username: "MinecraftPro",
-          avatar: "/api/placeholder/40/40",
-          games: ["Minecraft", "Terraria"],
-          mutual: 1,
-          requestDate: "2024-06-24"
-        }
-      ],
-      friends: [
-        {
-          id: 1,
-          username: "BestBuddy123",
-          avatar: "/api/placeholder/40/40",
-          status: "online",
-          game: "Valorant",
-          lastSeen: null
-        },
-        {
-          id: 2,
-          username: "CoopPlayer",
-          avatar: "/api/placeholder/40/40",
-          status: "ingame",
-          game: "Minecraft",
-          lastSeen: null
-        },
-        {
-          id: 3,
-          username: "NightOwl",
-          avatar: "/api/placeholder/40/40",
-          status: "offline",
-          game: null,
-          lastSeen: "vor 2 Stunden"
-        }
-      ],
-      achievements: [
-        {
-          id: 1,
-          name: "First Steps",
-          description: "Erste Nachricht im Discord gesendet",
-          icon: "💬",
-          unlocked: true,
-          unlockedAt: "2023-03-15",
-          rarity: "common"
-        },
-        {
-          id: 2,
-          name: "Voice Chat Master",
-          description: "100 Stunden im Voice Chat verbracht",
-          icon: "🎤",
-          unlocked: true,
-          unlockedAt: "2024-06-25",
-          rarity: "rare"
-        },
-        {
-          id: 3,
-          name: "Social Butterfly",
-          description: "500 Nachrichten in einer Woche",
-          icon: "🦋",
-          unlocked: true,
-          unlockedAt: "2024-06-23",
-          rarity: "uncommon"
-        },
-        {
-          id: 4,
-          name: "Tournament Victor",
-          description: "Ein Turnier gewinnen",
-          icon: "🏆",
-          unlocked: false,
-          unlockedAt: null,
-          rarity: "legendary"
-        },
-        {
-          id: 5,
-          name: "Night Owl",
-          description: "24 Stunden durchgehend online",
-          icon: "🦉",
-          unlocked: false,
-          unlockedAt: null,
-          rarity: "epic"
-        }
-      ]
-    };
-  };
-
-  // Haupt-Funktion zum Laden aller Dashboard-Daten
-  const fetchDashboardData = async () => {
+  // Initial data load
+  const loadInitialData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Versuche echte API-Daten zu laden
-      try {
-        // Parallel API-Calls für bessere Performance
-        const [
-          overviewData,
-          gamingData,
-          eventsData,
-          buddyData,
-          friendsData,
-          achievementsData
-        ] = await Promise.all([
-          fetchDashboardOverview(),
-          fetchGamingActivity('weekly'),
-          fetchRegisteredEvents(),
-          fetchBuddyRequests(),
-          fetchFriends(),
-          fetchAchievements()
-        ]);
+      console.log('🚀 Loading initial dashboard data...');
 
-        setData({
-          userData: overviewData.userData,
-          dashboardStats: overviewData.dashboardStats,
-          gameActivity: gamingData.gameActivity,
-          recentGamingActivity: gamingData.recentGamingActivity,
-          registeredEvents: eventsData.events || eventsData,
-          buddyRequests: buddyData.requests || buddyData,
-          friends: friendsData.friends || friendsData,
-          achievements: achievementsData.achievements || achievementsData
-        });
-      } catch (apiError) {
-        console.warn('API nicht verfügbar, verwende Mock-Daten:', apiError.message);
-        
-        // Fallback zu Mock-Daten
-        const mockData = getMockData();
-        setData(mockData);
-      }
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching dashboard data:', err);
+      const overviewData = await fetchDashboardOverview();
+      console.log('✅ Overview data loaded:', overviewData);
+
+      const activityData = await fetchActivityOverview('weekly', selectedWeek);
+      console.log('✅ Activity data loaded:', activityData);
+
+      const socialData = await fetchSocialData();
+      console.log('✅ Social data loaded:', socialData);
+
+      setData({
+        userData: overviewData.userData,
+        dashboardStats: overviewData.dashboardStats,
+        activityData: activityData.activityData,
+        gamingActivity: null,
+        recentGamingActivity: null,
+        registeredEvents: socialData.registeredEvents,
+        buddyRequests: socialData.buddyRequests,
+        friends: socialData.friends,
+        achievements: []
+      });
+
+      console.log('🎉 Dashboard data loaded successfully');
+
+    } catch (error) {
+      console.error('❌ Error loading initial dashboard data:', error);
+      setError(error.message);
       
-      // Auch bei Fehler Mock-Daten verwenden
-      const mockData = getMockData();
-      setData(mockData);
+      // Fallback data
+      setData({
+        userData: {
+          id: 'mock-user',
+          username: 'Mock User',
+          avatar: null,
+          level: 1,
+          xp: 0,
+          xpToNext: 1000,
+          rank: 'Bronze',
+          rankColor: 'from-gray-400 to-gray-600',
+          joinDate: new Date('2024-01-15'),
+          lastActive: new Date(),
+          roles: ['member']
+        },
+        dashboardStats: {
+          totalMessages: 0,
+          voiceHours: 0,
+          gamesPlayed: 0,
+          eventsAttended: 0,
+          achievementsUnlocked: 0,
+          friendsOnline: 0,
+          weeklyProgress: { messages: 0, voiceTime: 0, gamesPlayed: 0 }
+        },
+        activityData: null,
+        gamingActivity: null,
+        recentGamingActivity: null,
+        registeredEvents: [],
+        buddyRequests: [],
+        friends: [],
+        achievements: []
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchDashboardOverview, fetchActivityOverview, fetchSocialData, selectedWeek]);
 
-  // Initial data fetch
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  // Funktion zum Neuladen aller Daten
-  const refetch = () => {
-    fetchDashboardData();
-  };
-
-  // Funktion zum Aktualisieren der Gaming-Aktivität mit neuem Zeitraum
-  const updateGameActivity = async (timeframe) => {
+  // ✅ UPDATED: Activity data mit präzisen Zeiträumen
+  const updateActivityData = useCallback(async (timeframe, targetDate = null) => {
     try {
-      const gamingData = await fetchGamingActivity(timeframe);
-      setData(prev => ({
-        ...prev,
-        gameActivity: gamingData.gameActivity,
-        recentGamingActivity: gamingData.recentGamingActivity
+      setActivityLoading(true);
+      console.log(`🔄 Updating activity data for timeframe: ${timeframe}`, { targetDate });
+      
+      let weekDate = null;
+      let monthDate = null;
+      
+      if (timeframe === 'weekly') {
+        weekDate = targetDate || selectedWeek;
+        setSelectedWeek(weekDate);
+      } else if (timeframe === 'monthly') {
+        monthDate = targetDate || selectedMonth;
+        setSelectedMonth(monthDate);
+      }
+      
+      const newActivityData = await fetchActivityOverview(timeframe, weekDate, monthDate);
+      console.log('✅ New activity data:', newActivityData);
+      
+      setData(prevData => ({
+        ...prevData,
+        activityData: newActivityData.activityData
       }));
-    } catch (err) {
-      console.warn('Gaming activity API nicht verfügbar, behalte aktuelle Daten');
-      // Bei Fehler aktuelle Daten beibehalten
+      
+      return newActivityData;
+    } catch (error) {
+      console.error('❌ Error updating activity data:', error);
+      setError(`Fehler beim Laden der ${timeframe}-Daten: ${error.message}`);
+      throw error;
+    } finally {
+      setActivityLoading(false);
     }
-  };
+  }, [fetchActivityOverview, selectedWeek, selectedMonth]);
 
-  // Zusätzliche API-Funktionen für spezifische Actions
-  const acceptBuddyRequest = async (requestId) => {
+  // ✅ NEW: Navigation functions
+  const navigateWeek = useCallback(async (direction) => {
+    const newWeek = new Date(selectedWeek);
+    newWeek.setDate(newWeek.getDate() + (direction * 7));
+    
+    console.log(`📅 Navigating week ${direction > 0 ? 'forward' : 'backward'} to:`, newWeek);
+    await updateActivityData('weekly', newWeek);
+  }, [selectedWeek, updateActivityData]);
+
+  const navigateMonth = useCallback(async (direction) => {
+    const newMonth = new Date(selectedMonth);
+    newMonth.setMonth(newMonth.getMonth() + direction);
+    
+    console.log(`📅 Navigating month ${direction > 0 ? 'forward' : 'backward'} to:`, newMonth);
+    await updateActivityData('monthly', newMonth);
+  }, [selectedMonth, updateActivityData]);
+
+  const goToCurrentWeek = useCallback(async () => {
+    const currentWeek = new Date();
+    console.log('📅 Going to current week:', currentWeek);
+    await updateActivityData('weekly', currentWeek);
+  }, [updateActivityData]);
+
+  const goToCurrentMonth = useCallback(async () => {
+    const currentMonth = new Date();
+    console.log('📅 Going to current month:', currentMonth);
+    await updateActivityData('monthly', currentMonth);
+  }, [updateActivityData]);
+
+  // Social Actions (bestehend)
+  const acceptBuddyRequest = useCallback(async (requestId) => {
     try {
-      await api.post(`/dashboard/buddy-requests/${requestId}/accept`);
-      // Buddy-Requests neu laden
-      const buddyData = await fetchBuddyRequests();
-      setData(prev => ({
-        ...prev,
-        buddyRequests: buddyData.requests || buddyData
+      await api.post(`/dashboard/social/buddy-requests/${requestId}/accept`);
+      const socialData = await fetchSocialData();
+      setData(prevData => ({
+        ...prevData,
+        buddyRequests: socialData.buddyRequests,
+        friends: socialData.friends
       }));
     } catch (error) {
       console.error('Error accepting buddy request:', error);
+      throw error;
     }
-  };
+  }, [fetchSocialData]);
 
-  const rejectBuddyRequest = async (requestId) => {
+  const rejectBuddyRequest = useCallback(async (requestId) => {
     try {
-      await api.post(`/dashboard/buddy-requests/${requestId}/reject`);
-      // Buddy-Requests neu laden
-      const buddyData = await fetchBuddyRequests();
-      setData(prev => ({
-        ...prev,
-        buddyRequests: buddyData.requests || buddyData
+      await api.post(`/dashboard/social/buddy-requests/${requestId}/reject`);
+      const socialData = await fetchSocialData();
+      setData(prevData => ({
+        ...prevData,
+        buddyRequests: socialData.buddyRequests
       }));
     } catch (error) {
       console.error('Error rejecting buddy request:', error);
+      throw error;
     }
-  };
+  }, [fetchSocialData]);
 
-  const cancelEventRegistration = async (eventId) => {
+  const cancelEventRegistration = useCallback(async (eventId) => {
     try {
-      await api.delete(`/dashboard/events/${eventId}/register`);
-      // Events neu laden
-      const eventsData = await fetchRegisteredEvents();
-      setData(prev => ({
-        ...prev,
-        registeredEvents: eventsData.events || eventsData
+      await api.delete(`/dashboard/social/events/${eventId}/registration`);
+      const socialData = await fetchSocialData();
+      setData(prevData => ({
+        ...prevData,
+        registeredEvents: socialData.registeredEvents
       }));
     } catch (error) {
       console.error('Error canceling event registration:', error);
+      throw error;
     }
-  };
+  }, [fetchSocialData]);
 
-  const sendFriendMessage = async (friendId, message) => {
+  const sendFriendMessage = useCallback(async (friendId, message) => {
     try {
-      await api.post(`/dashboard/friends/${friendId}/message`, { message });
-      // Optional: Feedback für User
+      await api.post(`/dashboard/social/friends/${friendId}/message`, { message });
     } catch (error) {
       console.error('Error sending friend message:', error);
+      throw error;
     }
-  };
+  }, []);
 
-  const inviteFriendToGame = async (friendId, game) => {
+  const inviteFriendToGame = useCallback(async (friendId, gameInfo) => {
     try {
-      await api.post(`/dashboard/friends/${friendId}/invite`, { game });
-      // Optional: Feedback für User
+      await api.post(`/dashboard/social/friends/${friendId}/game-invite`, gameInfo);
     } catch (error) {
       console.error('Error inviting friend to game:', error);
+      throw error;
     }
-  };
+  }, []);
+
+  const refetch = useCallback(async () => {
+    await loadInitialData();
+  }, [loadInitialData]);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
   return {
+    // Daten
     data,
     loading,
     error,
+    activityLoading,
+    
+    // Aktuelle Zeitraum-Auswahl
+    selectedWeek,
+    selectedMonth,
+    
+    // Basis-Actions
     refetch,
-    updateGameActivity,
-    // Action-Funktionen
+    
+    // Activity-spezifische Actions
+    updateActivityData,
+    
+    // ✅ NEW: Navigation Actions
+    navigateWeek,
+    navigateMonth,
+    goToCurrentWeek,
+    goToCurrentMonth,
+    
+    // Social Actions
     acceptBuddyRequest,
     rejectBuddyRequest,
     cancelEventRegistration,
     sendFriendMessage,
-    inviteFriendToGame
+    inviteFriendToGame,
+    
+    // Utility-Functions
+    fetchActivityOverview,
+    fetchSocialData
   };
 };
+
+export default useDashboardData;

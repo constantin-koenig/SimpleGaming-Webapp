@@ -1,4 +1,4 @@
-// ===== components/Dashboard.jsx (UPDATED - Nur Activity Overview) =====
+// frontend/src/pages/member/Dashboard.jsx - FIXED: Echte API-Daten Integration
 import React, { useState } from 'react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
@@ -23,13 +23,20 @@ const Dashboard = () => {
   // Activity States
   const [activityFilter, setActivityFilter] = useState('weekly');
 
-  // API Data Hook
+  // ✅ UPDATED: Verwende neuen optimierten Hook mit Navigation
   const { 
     data, 
     loading, 
-    error, 
-    refetch, 
-    updateGameActivity,
+    error,
+    activityLoading,
+    selectedWeek,
+    selectedMonth,
+    refetch,
+    updateActivityData,
+    navigateWeek,
+    navigateMonth,
+    goToCurrentWeek,
+    goToCurrentMonth,
     acceptBuddyRequest,
     rejectBuddyRequest,
     cancelEventRegistration,
@@ -49,13 +56,20 @@ const Dashboard = () => {
     navBorder: isDarkMode ? 'border-gray-700' : 'border-gray-200'
   };
 
-  // Handle activity filter change
+  // ✅ UPDATED: Handle activity filter change mit präzisen Zeiträumen
   const handleActivityFilterChange = async (newFilter) => {
     setActivityFilter(newFilter);
     
-    // Update activity-related data if needed
-    if (newFilter === 'daily') {
-      // Could trigger specific daily data updates
+    try {
+      console.log(`🔄 Changing activity filter to: ${newFilter}`);
+      
+      // Für weekly/monthly ohne spezifisches Datum = aktuelle Woche/Monat
+      await updateActivityData(newFilter);
+      console.log(`✅ Activity filter changed successfully`);
+    } catch (error) {
+      console.error('❌ Error changing activity filter:', error);
+      // Fallback: Filter zurücksetzen bei Fehler
+      setActivityFilter(activityFilter);
     }
   };
 
@@ -122,14 +136,35 @@ const Dashboard = () => {
               themeClasses={themeClasses}
             />
 
-            {/* Activity Overview - Nur noch diese eine Component */}
-            <ActivityOverview
-              activityFilter={activityFilter}
-              setActivityFilter={handleActivityFilterChange}
-              activityData={data.combinedActivity} // Würde aus API kommen
-              themeClasses={themeClasses}
-              isDarkMode={isDarkMode}
-            />
+            {/* ✅ FIXED: Activity Overview mit echten API-Daten */}
+            <div className="relative">
+              {/* Loading Overlay für Activity Updates */}
+              {activityLoading && (
+                <div className="absolute inset-0 bg-black/20 rounded-3xl z-10 flex items-center justify-center">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-lg">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+                    <p className={`mt-2 text-sm ${themeClasses.text}`}>Lade Aktivitätsdaten...</p>
+                  </div>
+                </div>
+              )}
+              
+              <ActivityOverview
+                activityFilter={activityFilter}
+                setActivityFilter={handleActivityFilterChange}
+                activityData={data.activityData}
+                userJoinDate={data.userData?.joinDate}
+                themeClasses={themeClasses}
+                isDarkMode={isDarkMode}
+                loading={activityLoading}
+                // ✅ NEW: Navigation props
+                selectedWeek={selectedWeek}
+                selectedMonth={selectedMonth}
+                navigateWeek={navigateWeek}
+                navigateMonth={navigateMonth}
+                goToCurrentWeek={goToCurrentWeek}
+                goToCurrentMonth={goToCurrentMonth}
+              />
+            </div>
 
             {/* Erfolge */}
             <Achievements 
@@ -174,6 +209,19 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* ✅ DEBUG: Development Info */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-black/80 text-white p-3 rounded-lg text-xs font-mono max-w-xs">
+          <div><strong>Debug Info:</strong></div>
+          <div>Filter: {activityFilter}</div>
+          <div>Loading: {activityLoading ? 'Yes' : 'No'}</div>
+          <div>Data Points: {data.activityData?.length || 0}</div>
+          <div>Has Real Data: {data.activityData ? 'Yes' : 'No'}</div>
+          <div>User ID: {data.userData?.id?.slice(-6) || 'N/A'}</div>
+          <div>Last Update: {new Date().toLocaleTimeString()}</div>
+        </div>
+      )}
     </div>
   );
 };

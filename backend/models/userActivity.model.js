@@ -1,4 +1,4 @@
-// backend/models/userActivity.model.js - FIXED: Mit Gaming-Support
+// backend/models/userActivity.model.js - FIXED: ObjectId Probleme behoben
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -10,12 +10,10 @@ const userActivitySchema = new Schema({
     index: true
   },
   
-  // ✅ ENHANCED: Erweiterte Activity-Types für Gaming
   activityType: {
     type: String,
     required: true,
     enum: [
-      // Bestehende Activity-Types
       'MESSAGE',
       'VOICE_JOIN',
       'VOICE_LEAVE',
@@ -25,8 +23,6 @@ const userActivitySchema = new Schema({
       'EVENT_JOINED',
       'EVENT_LEFT',
       'EVENT_WON',
-      
-      // ✅ NEW: Gaming Activity-Types
       'GAME_START',
       'GAME_END',
       'GAME_SWITCH',
@@ -41,33 +37,21 @@ const userActivitySchema = new Schema({
     index: true
   },
   
-  // ✅ ENHANCED: Erweiterte Metadata für Gaming-Activities
   metadata: {
-    // Voice-bezogene Metadaten
     channelId: String,
     channelName: String,
     guildId: String,
-    duration: Number, // Minuten
-    
-    // ✅ Gaming-bezogene Metadaten
+    duration: Number,
     gameName: String,
-    gameType: String, // ActivityType.Playing, ActivityType.Streaming
-    fromGame: String, // Bei GAME_SWITCH
-    toGame: String,   // Bei GAME_SWITCH
+    gameType: String,
+    fromGame: String,
+    toGame: String,
     sessionId: String,
-    
-    // Message-bezogene Metadaten
     messageLength: Number,
     hasAttachments: Boolean,
-    
-    // Event-bezogene Metadaten
     eventId: String,
     eventName: String,
-    
-    // Server-bezogene Metadaten
     guildName: String,
-    
-    // Zusätzliche Daten
     details: Schema.Types.Mixed
   }
 }, { 
@@ -80,7 +64,96 @@ userActivitySchema.index({ userId: 1, activityType: 1, timestamp: -1 });
 userActivitySchema.index({ activityType: 1, timestamp: -1 });
 userActivitySchema.index({ timestamp: -1 });
 
-// ✅ ENHANCED: Gaming-spezifische Methoden
+// ✅ FIXED: Gaming-Session-Statistiken mit korrektem ObjectId
+userActivitySchema.statics.getGamingSessionStats = async function(userId, timeframe = 'month') {
+  const now = new Date();
+  let dateFilter = {};
+  
+  switch(timeframe) {
+    case 'day':
+      dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
+      break;
+    case 'week':
+    case 'weekly':
+      dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
+      break;
+    case 'month':
+    case 'monthly':
+      dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
+      break;
+  }
+  
+  // ✅ FIX: Korrekte ObjectId Konvertierung
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  
+  return await this.aggregate([
+    {
+      $match: {
+        userId: userObjectId,
+        activityType: 'GAME_END',
+        'metadata.gameName': { $exists: true },
+        'metadata.duration': { $exists: true, $gt: 0 },
+        ...(Object.keys(dateFilter).length > 0 && { timestamp: dateFilter })
+      }
+    },
+    {
+      $group: {
+        _id: '$metadata.gameName',
+        sessionsCount: { $sum: 1 },
+        totalMinutes: { $sum: '$metadata.duration' },
+        totalHours: { $sum: { $divide: ['$metadata.duration', 60] } },
+        averageSessionLength: { $avg: '$metadata.duration' },
+        lastPlayed: { $max: '$timestamp' }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        gameName: '$_id',
+        sessionsCount: 1,
+        totalMinutes: 1,
+        totalHours: { $round: ['$totalHours', 1] },
+        averageSessionLength: { $round: ['$averageSessionLength', 1] },
+        lastPlayed: 1
+      }
+    },
+    { $sort: { totalHours: -1, sessionsCount: -1 } }
+  ]);
+};
+
+// ✅ FIXED: Gaming-Aktivitäten abrufen mit korrektem ObjectId
+userActivitySchema.statics.getGamingActivities = async function(userId, timeframe = 'month', limit = 20) {
+  const now = new Date();
+  let dateFilter = {};
+  
+  switch(timeframe) {
+    case 'day':
+      dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
+      break;
+    case 'week':
+    case 'weekly':
+      dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
+      break;
+    case 'month':
+    case 'monthly':
+      dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
+      break;
+  }
+  
+  // ✅ FIX: Korrekte ObjectId Konvertierung
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  
+  return await this.find({
+    userId: userObjectId,
+    activityType: { $in: ['GAME_START', 'GAME_END', 'GAME_SWITCH'] },
+    ...(Object.keys(dateFilter).length > 0 && { timestamp: dateFilter })
+  })
+  .sort({ timestamp: -1 })
+  .limit(limit)
+  .select('activityType metadata timestamp');
+};
+
+// ✅ FIXED: Activity Stats mit korrektem ObjectId
 userActivitySchema.statics.getActivityStats = async function(userId, timeframe = 'month') {
   const now = new Date();
   let dateFilter = {};
@@ -90,20 +163,25 @@ userActivitySchema.statics.getActivityStats = async function(userId, timeframe =
       dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
       break;
     case 'week':
+    case 'weekly':
       dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
       break;
     case 'month':
+    case 'monthly':
       dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
       break;
     case 'all':
-      dateFilter = {}; // Keine Zeitbegrenzung
+      dateFilter = {};
       break;
   }
+  
+  // ✅ FIX: Korrekte ObjectId Konvertierung
+  const userObjectId = new mongoose.Types.ObjectId(userId);
   
   return await this.aggregate([
     {
       $match: {
-        userId: mongoose.Types.ObjectId(userId),
+        userId: userObjectId,
         ...(Object.keys(dateFilter).length > 0 && { timestamp: dateFilter })
       }
     },
@@ -127,34 +205,60 @@ userActivitySchema.statics.getActivityStats = async function(userId, timeframe =
   ]);
 };
 
-// ✅ ENHANCED: Gaming-Aktivitäten abrufen
-userActivitySchema.statics.getGamingActivities = async function(userId, timeframe = 'month', limit = 20) {
-  const now = new Date();
-  let dateFilter = {};
+// ✅ FIXED: Activity Trends mit korrektem ObjectId
+userActivitySchema.statics.getActivityTrends = async function(userId, days = 30) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
   
-  switch(timeframe) {
-    case 'day':
-      dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
-      break;
-    case 'week':
-      dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
-      break;
-    case 'month':
-      dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
-      break;
-  }
+  // ✅ FIX: Korrekte ObjectId Konvertierung
+  const userObjectId = new mongoose.Types.ObjectId(userId);
   
-  return await this.find({
-    userId: mongoose.Types.ObjectId(userId),
-    activityType: { $in: ['GAME_START', 'GAME_END', 'GAME_SWITCH'] },
-    ...(Object.keys(dateFilter).length > 0 && { timestamp: dateFilter })
-  })
-  .sort({ timestamp: -1 })
-  .limit(limit)
-  .select('activityType metadata timestamp');
+  return await this.aggregate([
+    {
+      $match: {
+        userId: userObjectId,
+        timestamp: { $gte: startDate }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$timestamp' },
+          month: { $month: '$timestamp' },
+          day: { $dayOfMonth: '$timestamp' }
+        },
+        totalCount: { $sum: 1 },
+        messageCount: {
+          $sum: { $cond: [{ $eq: ['$activityType', 'MESSAGE'] }, 1, 0] }
+        },
+        voiceCount: {
+          $sum: { $cond: [{ $in: ['$activityType', ['VOICE_JOIN', 'VOICE_LEAVE']] }, 1, 0] }
+        },
+        gamingCount: {
+          $sum: { $cond: [{ $in: ['$activityType', ['GAME_START', 'GAME_END', 'GAME_SWITCH']] }, 1, 0] }
+        }
+      }
+    },
+    {
+      $project: {
+        _id: {
+          $dateFromParts: {
+            year: '$_id.year',
+            month: '$_id.month',
+            day: '$_id.day'
+          }
+        },
+        totalCount: 1,
+        messageCount: 1,
+        voiceCount: 1,
+        gamingCount: 1
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
 };
 
-// ✅ Top Gaming-User ermitteln
+// ✅ FIXED: Top Gaming Users mit korrektem ObjectId
 userActivitySchema.statics.getTopGamingUsers = async function(timeframe = 'month', limit = 10) {
   const now = new Date();
   let dateFilter = {};
@@ -164,9 +268,11 @@ userActivitySchema.statics.getTopGamingUsers = async function(timeframe = 'month
       dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
       break;
     case 'week':
+    case 'weekly':
       dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
       break;
     case 'month':
+    case 'monthly':
       dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
       break;
   }
@@ -225,7 +331,7 @@ userActivitySchema.statics.getTopGamingUsers = async function(timeframe = 'month
   ]);
 };
 
-// Top aktive User (bestehende Methode erweitert)
+// ✅ FIXED: Top Active Users mit korrektem ObjectId
 userActivitySchema.statics.getTopActiveUsers = async function(timeframe = 'month', limit = 10) {
   const now = new Date();
   let dateFilter = {};
@@ -235,9 +341,11 @@ userActivitySchema.statics.getTopActiveUsers = async function(timeframe = 'month
       dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
       break;
     case 'week':
+    case 'weekly':
       dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
       break;
     case 'month':
+    case 'monthly':
       dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
       break;
   }
@@ -252,7 +360,6 @@ userActivitySchema.statics.getTopActiveUsers = async function(timeframe = 'month
       $group: {
         _id: '$userId',
         totalActivities: { $sum: 1 },
-        // ✅ Verschiedene Activity-Typen zählen
         messageCount: {
           $sum: { $cond: [{ $eq: ['$activityType', 'MESSAGE'] }, 1, 0] }
         },
@@ -285,7 +392,6 @@ userActivitySchema.statics.getTopActiveUsers = async function(timeframe = 'month
         voiceActivities: 1,
         gamingActivities: 1,
         lastActivity: 1,
-        // ✅ Activity-Score berechnen (Gaming wird höher gewichtet)
         activityScore: {
           $add: [
             '$messageCount',
@@ -297,108 +403,6 @@ userActivitySchema.statics.getTopActiveUsers = async function(timeframe = 'month
     },
     { $sort: { activityScore: -1, totalActivities: -1 } },
     { $limit: limit }
-  ]);
-};
-
-// Aktivitätstrends über Zeit
-userActivitySchema.statics.getActivityTrends = async function(userId, days = 30) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  
-  return await this.aggregate([
-    {
-      $match: {
-        userId: mongoose.Types.ObjectId(userId),
-        timestamp: { $gte: startDate }
-      }
-    },
-    {
-      $group: {
-        _id: {
-          year: { $year: '$timestamp' },
-          month: { $month: '$timestamp' },
-          day: { $dayOfMonth: '$timestamp' }
-        },
-        totalCount: { $sum: 1 },
-        messageCount: {
-          $sum: { $cond: [{ $eq: ['$activityType', 'MESSAGE'] }, 1, 0] }
-        },
-        voiceCount: {
-          $sum: { $cond: [{ $in: ['$activityType', ['VOICE_JOIN', 'VOICE_LEAVE']] }, 1, 0] }
-        },
-        gamingCount: {
-          $sum: { $cond: [{ $in: ['$activityType', ['GAME_START', 'GAME_END', 'GAME_SWITCH']] }, 1, 0] }
-        }
-      }
-    },
-    {
-      $project: {
-        _id: {
-          $dateFromParts: {
-            year: '$_id.year',
-            month: '$_id.month',
-            day: '$_id.day'
-          }
-        },
-        totalCount: 1,
-        messageCount: 1,
-        voiceCount: 1,
-        gamingCount: 1
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
-};
-
-// ✅ NEW: Gaming-Session-Statistiken
-userActivitySchema.statics.getGamingSessionStats = async function(userId, timeframe = 'month') {
-  const now = new Date();
-  let dateFilter = {};
-  
-  switch(timeframe) {
-    case 'day':
-      dateFilter = { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
-      break;
-    case 'week':
-      dateFilter = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
-      break;
-    case 'month':
-      dateFilter = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
-      break;
-  }
-  
-  return await this.aggregate([
-    {
-      $match: {
-        userId: mongoose.Types.ObjectId(userId),
-        activityType: 'GAME_END',
-        'metadata.gameName': { $exists: true },
-        'metadata.duration': { $exists: true, $gt: 0 },
-        ...(Object.keys(dateFilter).length > 0 && { timestamp: dateFilter })
-      }
-    },
-    {
-      $group: {
-        _id: '$metadata.gameName',
-        sessionsCount: { $sum: 1 },
-        totalMinutes: { $sum: '$metadata.duration' },
-        totalHours: { $sum: { $divide: ['$metadata.duration', 60] } },
-        averageSessionLength: { $avg: '$metadata.duration' },
-        lastPlayed: { $max: '$timestamp' }
-      }
-    },
-    {
-      $project: {
-        _id: 0,
-        gameName: '$_id',
-        sessionsCount: 1,
-        totalMinutes: 1,
-        totalHours: { $round: ['$totalHours', 1] },
-        averageSessionLength: { $round: ['$averageSessionLength', 1] },
-        lastPlayed: 1
-      }
-    },
-    { $sort: { totalHours: -1, sessionsCount: -1 } }
   ]);
 };
 
