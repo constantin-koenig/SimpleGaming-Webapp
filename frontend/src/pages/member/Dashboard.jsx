@@ -1,4 +1,4 @@
-// frontend/src/pages/member/Dashboard.jsx - FIXED: Echte API-Daten Integration
+// frontend/src/pages/member/Dashboard.jsx - CLEANED VERSION
 import React, { useState } from 'react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
@@ -23,7 +23,7 @@ const Dashboard = () => {
   // Activity States
   const [activityFilter, setActivityFilter] = useState('weekly');
 
-  // ✅ UPDATED: Verwende neuen optimierten Hook mit Navigation
+  // Dashboard Data Hook
   const { 
     data, 
     loading, 
@@ -56,19 +56,14 @@ const Dashboard = () => {
     navBorder: isDarkMode ? 'border-gray-700' : 'border-gray-200'
   };
 
-  // ✅ UPDATED: Handle activity filter change mit präzisen Zeiträumen
+  // Handle activity filter change
   const handleActivityFilterChange = async (newFilter) => {
     setActivityFilter(newFilter);
     
     try {
-      console.log(`🔄 Changing activity filter to: ${newFilter}`);
-      
-      // Für weekly/monthly ohne spezifisches Datum = aktuelle Woche/Monat
       await updateActivityData(newFilter);
-      console.log(`✅ Activity filter changed successfully`);
     } catch (error) {
-      console.error('❌ Error changing activity filter:', error);
-      // Fallback: Filter zurücksetzen bei Fehler
+      console.error('Error changing activity filter:', error);
       setActivityFilter(activityFilter);
     }
   };
@@ -136,7 +131,7 @@ const Dashboard = () => {
               themeClasses={themeClasses}
             />
 
-            {/* ✅ FIXED: Activity Overview mit echten API-Daten */}
+            {/* Activity Overview */}
             <div className="relative">
               {/* Loading Overlay für Activity Updates */}
               {activityLoading && (
@@ -156,7 +151,6 @@ const Dashboard = () => {
                 themeClasses={themeClasses}
                 isDarkMode={isDarkMode}
                 loading={activityLoading}
-                // ✅ NEW: Navigation props
                 selectedWeek={selectedWeek}
                 selectedMonth={selectedMonth}
                 navigateWeek={navigateWeek}
@@ -209,19 +203,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* ✅ DEBUG: Development Info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 right-4 bg-black/80 text-white p-3 rounded-lg text-xs font-mono max-w-xs">
-          <div><strong>Debug Info:</strong></div>
-          <div>Filter: {activityFilter}</div>
-          <div>Loading: {activityLoading ? 'Yes' : 'No'}</div>
-          <div>Data Points: {data.activityData?.length || 0}</div>
-          <div>Has Real Data: {data.activityData ? 'Yes' : 'No'}</div>
-          <div>User ID: {data.userData?.id?.slice(-6) || 'N/A'}</div>
-          <div>Last Update: {new Date().toLocaleTimeString()}</div>
-        </div>
-      )}
     </div>
   );
 };
