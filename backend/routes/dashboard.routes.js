@@ -24,13 +24,16 @@ router.get('/overview', protect, async (req, res) => {
       return res.status(404).json({ message: 'Benutzer nicht gefunden' });
     }
 
+    // ✅ FIXED: Berechne die Anzahl unterschiedlicher Spiele die der User gespielt hat
+    const uniqueGamesCount = await calculateUniqueGamesPlayed(req.user.id);
+
     // ✅ FIXED: Vollständige Benutzer-Grunddaten mit Discord-Infos für Avatar
     const userData = {
       id: user._id,
       username: user.username,
-      discordId: user.discordId, // ✅ FIX: Für Avatar-URLs benötigt
-      avatar: user.avatar,        // ✅ FIX: Avatar-Hash von Discord
-      discriminator: user.discriminator, // ✅ FIX: Discord Discriminator
+      discordId: user.discordId,
+      avatar: user.avatar,
+      discriminator: user.discriminator,
       level: user.level || 1,
       xp: user.xp || 0,
       xpToNext: user.xpToNext || 1000,
@@ -42,22 +45,20 @@ router.get('/overview', protect, async (req, res) => {
       joinDate: user.createdAt,
       lastActive: user.stats?.lastSeen || new Date(),
       roles: user.roles || ['member'],
-      isOnline: user.isOnline || false, // ✅ FIX: Online-Status für Avatar
-      
-      // ✅ ZUSÄTZLICHE Discord-Infos falls vorhanden
+      isOnline: user.isOnline || false,
       email: user.email || null,
       guilds: user.guilds || []
     };
 
-    // Basis Dashboard-Statistiken (für Stat-Cards) - OHNE EVENTS
+    // ✅ FIXED: Dashboard-Statistiken mit korrekter Spiele-Zählung
     const dashboardStats = {
       totalMessages: user.stats?.messagesCount || 0,
       voiceHours: Math.floor((user.stats?.voiceMinutes || 0) / 60),
-      gamesPlayed: user.stats?.gamesPlayed || 0,
+      gamesPlayed: uniqueGamesCount, // ✅ FIXED: Anzahl unterschiedlicher Spiele statt Sessions
       achievementsUnlocked: user.achievements?.length || 0,
-      friendsOnline: 0, // Wird über /social/friends geholt
+      friendsOnline: 0,
       
-      // Basis Weekly Progress (vereinfacht) - OHNE EVENTS
+      // Basis Weekly Progress (vereinfacht)
       weeklyProgress: await calculateBasicWeeklyProgress(user._id)
     };
 
@@ -65,7 +66,8 @@ router.get('/overview', protect, async (req, res) => {
       success: true,
       data: {
         userData,
-        dashboardStats
+        dashboardStats,
+        achievements: user.achievements || []
       },
       timestamp: new Date()
     });
@@ -80,6 +82,39 @@ router.get('/overview', protect, async (req, res) => {
   }
 });
 
+// ✅ NEW: Funktion um die Anzahl unterschiedlicher Spiele zu berechnen
+async function calculateUniqueGamesPlayed(userId) {
+  try {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    
+    // Finde alle unterschiedlichen Spiele die der User gespielt hat
+    const uniqueGames = await UserActivity.aggregate([
+      {
+        $match: {
+          userId: userObjectId,
+          activityType: { $in: ['GAME_START', 'GAME_END', 'GAME_SWITCH'] },
+          'metadata.gameName': { $exists: true, $ne: null, $ne: '' }
+        }
+      },
+      {
+        $group: {
+          _id: '$metadata.gameName' // Gruppiere nach Spielnamen
+        }
+      },
+      {
+        $count: 'uniqueGamesCount' // Zähle die Gruppen
+      }
+    ]);
+
+    // Rückgabe der Anzahl oder 0 falls keine Spiele gefunden
+    return uniqueGames.length > 0 ? uniqueGames[0].uniqueGamesCount : 0;
+    
+  } catch (error) {
+    console.error('Error calculating unique games played:', error);
+    return 0;
+  }
+}
+
 // ✅ HELPER: Basis Weekly Progress berechnen - OHNE EVENTS
 async function calculateBasicWeeklyProgress(userId) {
   try {
@@ -93,11 +128,11 @@ async function calculateBasicWeeklyProgress(userId) {
     });
 
     const weeklyStats = {
-      messages: weeklyActivities.filter(a => a.activityType === 'message').length,
+      messages: weeklyActivities.filter(a => a.activityType === 'MESSAGE').length,
       voiceMinutes: weeklyActivities
-        .filter(a => a.activityType === 'voice')
+        .filter(a => a.activityType === 'VOICE_LEAVE')
         .reduce((sum, a) => sum + (a.metadata?.duration || 0), 0),
-      gamesPlayed: weeklyActivities.filter(a => a.activityType === 'gaming').length,
+      gamesPlayed: weeklyActivities.filter(a => a.activityType === 'GAME_END').length,
       xpGained: weeklyActivities.reduce((sum, a) => sum + (a.xpGained || 0), 0)
     };
 

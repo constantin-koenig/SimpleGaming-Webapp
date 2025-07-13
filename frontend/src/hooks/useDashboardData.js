@@ -165,51 +165,73 @@ export const useDashboardData = () => {
   }, [fetchActivityOverview, selectedWeek, selectedMonth]);
 
   // Navigation functions
-  const navigateWeek = useCallback(async (direction) => {
-    try {
-      let directionMultiplier;
-      if (typeof direction === 'string') {
-        directionMultiplier = direction === 'next' ? 1 : -1;
-      } else {
-        directionMultiplier = direction;
-      }
-      
-      const currentWeek = selectedWeek instanceof Date ? selectedWeek : new Date(selectedWeek);
-      if (isNaN(currentWeek.getTime())) {
-        return;
-      }
-      
-      const newWeek = new Date(currentWeek);
-      newWeek.setDate(newWeek.getDate() + (directionMultiplier * 7));
-      
-      await updateActivityData('weekly', newWeek);
-    } catch (error) {
-      setError('Fehler beim Navigieren zwischen Wochen');
+const navigateWeek = useCallback(async (direction, targetDate = null) => {
+  try {
+    // NEU: Wenn 'date' als direction und ein targetDate übergeben wird
+    if (direction === 'date' && targetDate) {
+      const newWeekDate = new Date(targetDate);
+      setSelectedWeek(newWeekDate);
+      await updateActivityData('weekly', newWeekDate);
+      return;
     }
-  }, [selectedWeek, updateActivityData]);
 
-  const navigateMonth = useCallback(async (direction) => {
-    try {
-      let directionMultiplier;
-      if (typeof direction === 'string') {
-        directionMultiplier = direction === 'next' ? 1 : -1;
-      } else {
-        directionMultiplier = direction;
-      }
-      
-      const currentMonth = selectedMonth instanceof Date ? selectedMonth : new Date(selectedMonth);
-      if (isNaN(currentMonth.getTime())) {
-        return;
-      }
-      
-      const newMonth = new Date(currentMonth);
-      newMonth.setMonth(newMonth.getMonth() + directionMultiplier);
-      
-      await updateActivityData('monthly', newMonth);
-    } catch (error) {
-      setError('Fehler beim Navigieren zwischen Monaten');
+    // Bestehende Logik für prev/next
+    let directionMultiplier;
+    if (typeof direction === 'string') {
+      directionMultiplier = direction === 'next' ? 1 : -1;
+    } else {
+      directionMultiplier = direction;
     }
-  }, [selectedMonth, updateActivityData]);
+    
+    const currentWeek = selectedWeek instanceof Date ? selectedWeek : new Date(selectedWeek);
+    if (isNaN(currentWeek.getTime())) {
+      return;
+    }
+    
+    const newWeek = new Date(currentWeek);
+    newWeek.setDate(newWeek.getDate() + (directionMultiplier * 7));
+    
+    setSelectedWeek(newWeek);
+    await updateActivityData('weekly', newWeek);
+  } catch (error) {
+    console.error('Week navigation error:', error);
+    setError('Fehler beim Navigieren zwischen Wochen');
+  }
+}, [selectedWeek, updateActivityData]);
+
+  const navigateMonth = useCallback(async (direction, targetDate = null) => {
+  try {
+    // NEU: Wenn 'date' als direction und ein targetDate übergeben wird
+    if (direction === 'date' && targetDate) {
+      const newMonthDate = new Date(targetDate);
+      setSelectedMonth(newMonthDate);
+      await updateActivityData('monthly', newMonthDate);
+      return;
+    }
+
+    // Bestehende Logik für prev/next
+    let directionMultiplier;
+    if (typeof direction === 'string') {
+      directionMultiplier = direction === 'next' ? 1 : -1;
+    } else {
+      directionMultiplier = direction;
+    }
+    
+    const currentMonth = selectedMonth instanceof Date ? selectedMonth : new Date(selectedMonth);
+    if (isNaN(currentMonth.getTime())) {
+      return;
+    }
+    
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + directionMultiplier);
+    
+    setSelectedMonth(newMonth);
+    await updateActivityData('monthly', newMonth);
+  } catch (error) {
+    console.error('Month navigation error:', error);
+    setError('Fehler beim Navigieren zwischen Monaten');
+  }
+}, [selectedMonth, updateActivityData]);
 
   const goToCurrentWeek = useCallback(async () => {
     try {
@@ -298,6 +320,8 @@ export const useDashboardData = () => {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  
 
   return {
     // Daten
