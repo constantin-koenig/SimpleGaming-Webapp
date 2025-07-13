@@ -1,22 +1,15 @@
-// backend/routes/dashboard/activity.js - UPDATED: Präzise Zeiträume
+// backend/routes/dashboard/activity.js - OHNE EVENTS
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
-const User = require('../../models/user.model');
 const UserActivity = require('../../models/userActivity.model');
-const GameStats = require('../../models/gameStats.model');
-const { protect } = require('../../middleware/auth.middleware');
 
-// ✅ MAIN ROUTE: Activity Overview für alle Zeiträume
-router.get('/overview', protect, async (req, res) => {
+// ✅ OHNE EVENTS: Activity Overview ohne Event-Daten
+router.get('/overview', async (req, res) => {
   try {
     const { timeframe = 'weekly', weekDate, monthDate } = req.query;
     const userId = req.user.id;
-    
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'Benutzer nicht gefunden' });
-    }
+    const user = req.user;
 
     let activityData;
     
@@ -36,70 +29,52 @@ router.get('/overview', protect, async (req, res) => {
         activityData = await generateAllTimeActivityData(userId, user.createdAt);
         break;
       default:
-        return res.status(400).json({ message: 'Ungültiger Zeitrahmen' });
+        activityData = await generateWeeklyActivityData(userId);
     }
 
     res.json({
       success: true,
-      data: {
-        activityData,
-        userJoinDate: user.createdAt,
-        timeframe,
-        weekDate: weekDate || null,
-        monthDate: monthDate || null,
-        generatedAt: new Date()
-      }
+      data: activityData,
+      timeframe: timeframe,
+      timestamp: new Date()
     });
 
   } catch (error) {
     console.error('Error fetching activity overview:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Fehler beim Abrufen der Aktivitätsübersicht',
+      message: 'Fehler beim Abrufen der Aktivitätsdaten',
       error: error.message 
     });
   }
 });
 
-// ✅ NEW: Spezifische Woche (7 Tage dieser Woche)
-async function generateSpecificWeekData(userId, weekDateInput) {
-  // Bestimme die Woche basierend auf Input oder aktuelle Woche
-  const now = weekDateInput ? new Date(weekDateInput) : new Date();
+// ✅ OHNE EVENTS: Daily Activity (letzte 7 Tage) - KORRIGIERTE TAGESZUORDNUNG
+async function generateDailyActivityData(userId) {
+  const now = new Date();
+  now.setHours(23, 59, 59, 999); // Ende des heutigen Tages
   
-  // Finde den Montag dieser Woche
-  const mondayOfWeek = new Date(now);
-  const dayOfWeek = now.getDay(); // 0 = Sonntag, 1 = Montag, etc.
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sonntag wird zu 6
-  mondayOfWeek.setDate(now.getDate() - daysFromMonday);
-  mondayOfWeek.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(now.getDate() - 6); // Heute + 6 Tage zurück = 7 Tage
+  sevenDaysAgo.setHours(0, 0, 0, 0); // Anfang des ersten Tages
   
-  // Berechne Sonntag dieser Woche
-  const sundayOfWeek = new Date(mondayOfWeek);
-  sundayOfWeek.setDate(mondayOfWeek.getDate() + 6);
-  sundayOfWeek.setHours(23, 59, 59, 999);
-  
-  console.log(`📅 Generating week data from ${mondayOfWeek.toISOString()} to ${sundayOfWeek.toISOString()}`);
+
   
   const userObjectId = new mongoose.Types.ObjectId(userId);
   
-  // Aktivitäten für diese spezifische Woche aggregieren
-  const weeklyActivities = await UserActivity.aggregate([
+  const dailyActivities = await UserActivity.aggregate([
     {
       $match: {
         userId: userObjectId,
-        timestamp: { 
-          $gte: mondayOfWeek,
-          $lte: sundayOfWeek
-        }
+        timestamp: { $gte: sevenDaysAgo, $lte: now }
       }
     },
     {
       $group: {
         _id: {
-          year: { $year: { $dateAdd: { startDate: '$timestamp', unit: 'hour', amount: 0 } } },
-          month: { $month: { $dateAdd: { startDate: '$timestamp', unit: 'hour', amount: 0 } } },
-          day: { $dayOfMonth: { $dateAdd: { startDate: '$timestamp', unit: 'hour', amount: 0 } } },
-          dayOfWeek: { $dayOfWeek: { $dateAdd: { startDate: '$timestamp', unit: 'hour', amount: 0 } } }
+          year: { $year: '$timestamp' },
+          month: { $month: '$timestamp' },
+          day: { $dayOfMonth: '$timestamp' }
         },
         messages: {
           $sum: { $cond: [{ $eq: ['$activityType', 'MESSAGE'] }, 1, 0] }
@@ -121,9 +96,6 @@ async function generateSpecificWeekData(userId, weekDateInput) {
               0
             ]
           }
-        },
-        events: {
-          $sum: { $cond: [{ $eq: ['$activityType', 'EVENT_JOINED'] }, 1, 0] }
         }
       }
     },
@@ -137,29 +109,145 @@ async function generateSpecificWeekData(userId, weekDateInput) {
             day: '$_id.day'
           }
         },
-        dayOfWeek: '$_id.dayOfWeek',
         messages: 1,
         voice: 1,
-        gaming: 1,
-        events: 1
+        gaming: 1
       }
     },
     { $sort: { date: 1 } }
   ]);
 
-  // Vollständige Woche mit allen 7 Tagen erstellen
   const result = [];
-  const weekDays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   
+  // Erstelle Array für die letzten 7 Tage (inklusive heute)
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(now.getDate() - i);
+    date.setHours(0, 0, 0, 0); // Normalisiere auf Tagesanfang für Vergleich
+    
+    // Finde die Daten für diesen Tag
+    const dayData = dailyActivities.find(activity => {
+      const activityDate = new Date(activity.date);
+      activityDate.setHours(0, 0, 0, 0);
+      return activityDate.getTime() === date.getTime();
+    }) || { date, messages: 0, voice: 0, gaming: 0 };
+    
+    const previousData = result.length > 0 ? result[result.length - 1] : null;
+    
+    result.push({
+      period: date.toISOString().split('T')[0],
+      label: date.toLocaleDateString('de-DE', { weekday: 'short' }),
+      date: date,
+      messages: { 
+        value: dayData.messages, 
+        change: previousData ? dayData.messages - previousData.messages.value : 0 
+      },
+      voice: { 
+        value: dayData.voice, 
+        change: previousData ? dayData.voice - previousData.voice.value : 0 
+      },
+      gaming: { 
+        value: dayData.gaming, 
+        change: previousData ? dayData.gaming - previousData.gaming.value : 0 
+      }
+    });
+  }
+
+  return result;
+}
+
+// ✅ NEW: Spezifische Woche (7 Tage dieser Woche) - OHNE EVENTS
+async function generateSpecificWeekData(userId, weekDateInput) {
+  // Bestimme die Woche basierend auf Input oder aktuelle Woche
+  const now = weekDateInput ? new Date(weekDateInput) : new Date();
+  
+  // Finde den Montag dieser Woche
+  const mondayOfWeek = new Date(now);
+  const dayOfWeek = now.getDay(); // 0 = Sonntag, 1 = Montag, etc.
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sonntag = 6 Tage vom Montag
+  mondayOfWeek.setDate(now.getDate() - daysFromMonday);
+  mondayOfWeek.setHours(0, 0, 0, 0);
+  
+  // Sonntag der gleichen Woche
+  const sundayOfWeek = new Date(mondayOfWeek);
+  sundayOfWeek.setDate(mondayOfWeek.getDate() + 6);
+  sundayOfWeek.setHours(23, 59, 59, 999);
+  
+  
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  
+  // Aktivitäten für diese spezifische Woche aggregieren (Montag bis Sonntag)
+  const weeklyActivities = await UserActivity.aggregate([
+    {
+      $match: {
+        userId: userObjectId,
+        timestamp: { 
+          $gte: mondayOfWeek,
+          $lte: sundayOfWeek
+        }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$timestamp' },
+          month: { $month: '$timestamp' },
+          day: { $dayOfMonth: '$timestamp' }
+        },
+        messages: {
+          $sum: { $cond: [{ $eq: ['$activityType', 'MESSAGE'] }, 1, 0] }
+        },
+        voice: {
+          $sum: {
+            $cond: [
+              { $eq: ['$activityType', 'VOICE_LEAVE'] },
+              { $ifNull: ['$metadata.duration', 0] },
+              0
+            ]
+          }
+        },
+        gaming: {
+          $sum: {
+            $cond: [
+              { $eq: ['$activityType', 'GAME_END'] },
+              { $ifNull: ['$metadata.duration', 0] },
+              0
+            ]
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        date: {
+          $dateFromParts: {
+            year: '$_id.year',
+            month: '$_id.month',
+            day: '$_id.day'
+          }
+        },
+        messages: 1,
+        voice: 1,
+        gaming: 1
+      }
+    },
+    { $sort: { date: 1 } }
+  ]);
+
+  // Erstelle 7-Tage Array (Montag bis Sonntag)
+  const weekDays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const result = [];
+
   for (let i = 0; i < 7; i++) {
     const currentDate = new Date(mondayOfWeek);
     currentDate.setDate(mondayOfWeek.getDate() + i);
     
+    // Finde die Daten für diesen Tag
     const dayData = weeklyActivities.find(activity => 
       activity.date.toDateString() === currentDate.toDateString()
-    ) || { date: currentDate, messages: 0, voice: 0, gaming: 0, events: 0 };
+    ) || { date: currentDate, messages: 0, voice: 0, gaming: 0 };
     
-    // Berechne Change zum Vortag
     const previousData = i > 0 ? result[i - 1] : null;
     
     result.push({
@@ -177,10 +265,6 @@ async function generateSpecificWeekData(userId, weekDateInput) {
       gaming: { 
         value: dayData.gaming, 
         change: previousData ? dayData.gaming - previousData.gaming.value : 0 
-      },
-      events: { 
-        value: dayData.events, 
-        change: previousData ? dayData.events - previousData.events.value : 0 
       }
     });
   }
@@ -188,7 +272,7 @@ async function generateSpecificWeekData(userId, weekDateInput) {
   return result;
 }
 
-// ✅ NEW: Spezifischer Monat (Kalenderwochen dieses Monats)
+// ✅ NEW: Spezifischer Monat (Kalenderwochen dieses Monats) - OHNE EVENTS
 async function generateSpecificMonthData(userId, monthDateInput) {
   // Bestimme den Monat basierend auf Input oder aktueller Monat
   const targetDate = monthDateInput ? new Date(monthDateInput) : new Date();
@@ -201,7 +285,6 @@ async function generateSpecificMonthData(userId, monthDateInput) {
   const lastDayOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
   lastDayOfMonth.setHours(23, 59, 59, 999);
   
-  console.log(`📅 Generating month data from ${firstDayOfMonth.toISOString()} to ${lastDayOfMonth.toISOString()}`);
   
   const userObjectId = new mongoose.Types.ObjectId(userId);
   
@@ -243,9 +326,6 @@ async function generateSpecificMonthData(userId, monthDateInput) {
             ]
           }
         },
-        events: {
-          $sum: { $cond: [{ $eq: ['$activityType', 'EVENT_JOINED'] }, 1, 0] }
-        },
         firstDayOfWeek: { $min: '$timestamp' },
         lastDayOfWeek: { $max: '$timestamp' }
       }
@@ -266,13 +346,12 @@ async function generateSpecificMonthData(userId, monthDateInput) {
       const weekNumber = week._id.week;
       const previous = result[result.length - 1]; // Vorherige Woche in Result-Array
       
-      // Bestimme Wochenlabel (KW XX oder W1, W2, etc.)
-      const weekLabel = `W${result.length + 1}`;
-      const calendarWeekLabel = `KW${weekNumber}`;
+      // Bestimme Wochenlabel - KALENDERWOCHE anstatt W1, W2
+      const calendarWeekLabel = `W${weekNumber}`;
       
       result.push({
         period: `${week._id.year}-W${weekNumber.toString().padStart(2, '0')}`,
-        label: weekLabel, // W1, W2, W3, W4, (W5)
+        label: calendarWeekLabel, // KW28, KW29, KW30, etc.
         calendarWeek: calendarWeekLabel, // KW28, KW29, etc.
         date: weekStart,
         weekStart: weekStart,
@@ -288,10 +367,6 @@ async function generateSpecificMonthData(userId, monthDateInput) {
         gaming: { 
           value: week.gaming, 
           change: previous ? week.gaming - previous.gaming.value : 0 
-        },
-        events: { 
-          value: week.events, 
-          change: previous ? week.events - previous.events.value : 0 
         }
       });
     }
@@ -300,109 +375,8 @@ async function generateSpecificMonthData(userId, monthDateInput) {
   return result;
 }
 
-// ✅ KEEP: Bestehende Funktionen (daily und alltime bleiben unverändert)
-async function generateDailyActivityData(userId) {
-  const now = new Date();
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  
-  const userObjectId = new mongoose.Types.ObjectId(userId);
-  
-  const dailyActivities = await UserActivity.aggregate([
-    {
-      $match: {
-        userId: userObjectId,
-        timestamp: { $gte: sevenDaysAgo }
-      }
-    },
-    {
-      $group: {
-        _id: {
-          year: { $year: '$timestamp' },
-          month: { $month: '$timestamp' },
-          day: { $dayOfMonth: '$timestamp' }
-        },
-        messages: {
-          $sum: { $cond: [{ $eq: ['$activityType', 'MESSAGE'] }, 1, 0] }
-        },
-        voice: {
-          $sum: {
-            $cond: [
-              { $eq: ['$activityType', 'VOICE_LEAVE'] },
-              { $ifNull: ['$metadata.duration', 0] },
-              0
-            ]
-          }
-        },
-        gaming: {
-          $sum: {
-            $cond: [
-              { $eq: ['$activityType', 'GAME_END'] },
-              { $ifNull: ['$metadata.duration', 0] },
-              0
-            ]
-          }
-        },
-        events: {
-          $sum: { $cond: [{ $eq: ['$activityType', 'EVENT_JOINED'] }, 1, 0] }
-        }
-      }
-    },
-    {
-      $project: {
-        _id: 0,
-        date: {
-          $dateFromParts: {
-            year: '$_id.year',
-            month: '$_id.month',
-            day: '$_id.day'
-          }
-        },
-        messages: 1,
-        voice: 1,
-        gaming: 1,
-        events: 1
-      }
-    },
-    { $sort: { date: 1 } }
-  ]);
-
-  const result = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    date.setHours(0, 0, 0, 0);
-    
-    const dayData = dailyActivities.find(activity => 
-      activity.date.toDateString() === date.toDateString()
-    ) || { date, messages: 0, voice: 0, gaming: 0, events: 0 };
-    
-    result.push({
-      period: date.toISOString().split('T')[0],
-      label: date.toLocaleDateString('de-DE', { weekday: 'short' }),
-      date: date,
-      messages: { value: dayData.messages, change: 0 },
-      voice: { value: dayData.voice, change: 0 },
-      gaming: { value: dayData.gaming, change: 0 },
-      events: { value: dayData.events, change: 0 }
-    });
-  }
-
-  // Change-Werte berechnen
-  for (let i = 1; i < result.length; i++) {
-    const current = result[i];
-    const previous = result[i - 1];
-    
-    current.messages.change = current.messages.value - previous.messages.value;
-    current.voice.change = current.voice.value - previous.voice.value;
-    current.gaming.change = current.gaming.value - previous.gaming.value;
-    current.events.change = current.events.value - previous.events.value;
-  }
-
-  return result;
-}
-
+// ✅ OHNE EVENTS: AllTime Activity ohne Events
 async function generateAllTimeActivityData(userId, userCreatedAt) {
-  // Bestehende Alltime-Logik bleibt unverändert
   const now = new Date();
   const accountAge = now - new Date(userCreatedAt);
   const monthsOld = accountAge / (1000 * 60 * 60 * 24 * 30);
@@ -454,9 +428,6 @@ async function generateAllTimeActivityData(userId, userCreatedAt) {
             ]
           }
         },
-        events: {
-          $sum: { $cond: [{ $eq: ['$activityType', 'EVENT_JOINED'] }, 1, 0] }
-        },
         firstActivity: { $min: '$timestamp' }
       }
     },
@@ -502,62 +473,9 @@ async function generateAllTimeActivityData(userId, userCreatedAt) {
       gaming: { 
         value: period.gaming, 
         change: previous ? period.gaming - previous.gaming : 0 
-      },
-      events: { 
-        value: period.events, 
-        change: previous ? period.events - previous.events : 0 
-      },
-      metadata: {
-        accountAge: labelFormat,
-        periodCount: allTimeActivities.length
       }
     };
   });
 }
-
-// Bestehende Gaming und Trends Routes bleiben unverändert
-router.get('/gaming-details', protect, async (req, res) => {
-  try {
-    const { timeframe = 'week' } = req.query;
-    const userId = req.user.id;
-    
-    const gamingStats = await UserActivity.getGamingSessionStats(userId, timeframe);
-    
-    res.json({
-      success: true,
-      data: gamingStats,
-      timeframe
-    });
-    
-  } catch (error) {
-    console.error('Error fetching gaming details:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Fehler beim Abrufen der Gaming-Details' 
-    });
-  }
-});
-
-router.get('/trends', protect, async (req, res) => {
-  try {
-    const { days = 30 } = req.query;
-    const userId = req.user.id;
-    
-    const trends = await UserActivity.getActivityTrends(userId, parseInt(days));
-    
-    res.json({
-      success: true,
-      data: trends,
-      period: `${days} days`
-    });
-    
-  } catch (error) {
-    console.error('Error fetching activity trends:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Fehler beim Abrufen der Aktivitätstrends' 
-    });
-  }
-});
 
 module.exports = router;

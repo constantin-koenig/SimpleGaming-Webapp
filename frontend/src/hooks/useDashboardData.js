@@ -1,4 +1,4 @@
-// frontend/src/hooks/useDashboardData.js - FIXED: Date Navigation
+// frontend/src/hooks/useDashboardData.js - OHNE EVENTS
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 
@@ -19,7 +19,6 @@ export const useDashboardData = () => {
   const [error, setError] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
 
-  // ✅ FIXED: Verwende ursprüngliche Initialisierung wie vorher (funktioniert mit Backend)
   const [selectedWeek, setSelectedWeek] = useState(() => new Date());
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
 
@@ -34,18 +33,16 @@ export const useDashboardData = () => {
     }
   }, []);
 
-  // ✅ FIXED: Activity Overview mit korrekter Datums-Formatierung für Backend
+  // ✅ OHNE EVENTS: Activity Overview
   const fetchActivityOverview = useCallback(async (timeframe = 'weekly', weekDate = null, monthDate = null) => {
     try {
       setActivityLoading(true);
       
-      // ✅ FIXED: Verwende lokale Zeitzone für Datum-Parameter
       const params = new URLSearchParams({ timeframe });
       
       if (timeframe === 'weekly' && weekDate) {
         const validWeekDate = weekDate instanceof Date ? weekDate : new Date(weekDate);
         if (!isNaN(validWeekDate.getTime())) {
-          // ✅ FIXED: Verwende lokalen Datum-String ohne Timezone-Konvertierung
           const localDateString = `${validWeekDate.getFullYear()}-${String(validWeekDate.getMonth() + 1).padStart(2, '0')}-${String(validWeekDate.getDate()).padStart(2, '0')}`;
           params.append('weekDate', localDateString);
         }
@@ -59,9 +56,18 @@ export const useDashboardData = () => {
         }
       }
       
-      console.log(`🔄 Fetching activity data with params:`, params.toString());
       const response = await api.get(`/dashboard/activity/overview?${params.toString()}`);
-      return response.data.data;
+      
+      // ✅ OHNE EVENTS: Verarbeite nur messages, voice, gaming
+      const processedData = response.data.data.map(period => ({
+        ...period,
+        messages: period.messages || { value: 0, change: 0 },
+        voice: period.voice || { value: 0, change: 0 },
+        gaming: period.gaming || { value: 0, change: 0 }
+        // events entfernt
+      }));
+      
+      return { activityData: processedData };
     } catch (error) {
       console.error('Error fetching activity overview:', error);
       throw error;
@@ -80,13 +86,18 @@ export const useDashboardData = () => {
       ]);
 
       return {
-        friends: friends.data.data,
-        buddyRequests: buddyRequests.data.data,
-        registeredEvents: registeredEvents.data.data
+        friends: friends.data.data || [],
+        buddyRequests: buddyRequests.data.data || [],
+        registeredEvents: registeredEvents.data.data || []
       };
     } catch (error) {
       console.error('Error fetching social data:', error);
-      throw error;
+      // Fallback zu leeren Arrays
+      return {
+        friends: [],
+        buddyRequests: [],
+        registeredEvents: []
+      };
     }
   }, []);
 
@@ -97,9 +108,7 @@ export const useDashboardData = () => {
       setError(null);
 
       const overviewData = await fetchDashboardOverview();
-
       const activityData = await fetchActivityOverview('weekly', selectedWeek);
-
       const socialData = await fetchSocialData();
 
       setData({
@@ -119,7 +128,7 @@ export const useDashboardData = () => {
     }
   }, [fetchDashboardOverview, fetchActivityOverview, fetchSocialData, selectedWeek]);
 
-  // ✅ FIXED: Activity data mit präzisen Zeiträumen
+  // ✅ OHNE EVENTS: Activity data update
   const updateActivityData = useCallback(async (timeframe, targetDate = null) => {
     try {
       setActivityLoading(true);
@@ -130,12 +139,12 @@ export const useDashboardData = () => {
       if (timeframe === 'weekly') {
         weekDate = targetDate || selectedWeek;
         if (targetDate) {
-          setSelectedWeek(new Date(targetDate)); // ✅ FIXED: Verwende das originale Datum, nicht Montag
+          setSelectedWeek(new Date(targetDate));
         }
       } else if (timeframe === 'monthly') {
         monthDate = targetDate || selectedMonth;
         if (targetDate) {
-          setSelectedMonth(new Date(targetDate)); // ✅ FIXED: Verwende das originale Datum
+          setSelectedMonth(new Date(targetDate));
         }
       }
       
@@ -155,10 +164,9 @@ export const useDashboardData = () => {
     }
   }, [fetchActivityOverview, selectedWeek, selectedMonth]);
 
-  // ✅ FIXED: Navigation functions mit korrekter String-Parameter-Behandlung
+  // Navigation functions
   const navigateWeek = useCallback(async (direction) => {
     try {
-      // ✅ FIXED: Handle sowohl String ('prev'/'next') als auch Number (-1/1) Parameter
       let directionMultiplier;
       if (typeof direction === 'string') {
         directionMultiplier = direction === 'next' ? 1 : -1;
@@ -221,7 +229,7 @@ export const useDashboardData = () => {
     }
   }, [updateActivityData]);
 
-  // ✅ FIXED: Social Actions mit besserer Fehlerbehandlung
+  // Social Actions
   const acceptBuddyRequest = useCallback(async (requestId) => {
     try {
       await api.post(`/dashboard/social/buddy-requests/${requestId}/accept`);
@@ -287,10 +295,9 @@ export const useDashboardData = () => {
     await loadInitialData();
   }, [loadInitialData]);
 
-  // ✅ FIXED: Nur einmal beim Mount laden
   useEffect(() => {
     loadInitialData();
-  }, []); // Leere Dependencies, um nur einmal zu laden
+  }, []);
 
   return {
     // Daten

@@ -1,9 +1,9 @@
-// frontend/src/components/common/MemberLayout.jsx
-// Eine gemeinsame Layout-Komponente für alle Mitgliederseiten
+// frontend/src/components/common/MemberLayout.jsx - Aktualisiert mit UserAvatar
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import ThemeToggle from './ThemeToggle';
+import UserAvatar from './UserAvatar';
 
 const MemberLayout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -81,16 +81,29 @@ const MemberLayout = ({ children }) => {
             <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
               <ThemeToggle />
               <div className="relative">
-                <div className="flex items-center">
-                  <img
-                    className="h-8 w-8 rounded-full border border-light-border-primary dark:border-dark-border-primary"
-                    src={user && user.avatar ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png` : 'https://via.placeholder.com/40'}
-                    alt="Profilbild"
+                <div className="flex items-center space-x-3">
+                  {/* Aktualisierter Avatar mit GIF-Support */}
+                  <UserAvatar 
+                    user={user} 
+                    size="sm" 
+                    showBorder={true}
+                    className="cursor-pointer hover:ring-2 hover:ring-primary-500 hover:ring-offset-2 transition-all"
                   />
-                  <span className="ml-2 text-light-text-primary dark:text-dark-text-primary">{user?.username || 'Benutzer'}</span>
+                  
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                      {user?.username || 'Benutzer'}
+                    </span>
+                    {user?.level && (
+                      <span className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                        Level {user.level}
+                      </span>
+                    )}
+                  </div>
+                  
                   <button
                     onClick={logout}
-                    className="ml-4 px-3 py-2 rounded-md text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary"
+                    className="ml-4 px-3 py-2 rounded-md text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary transition-colors"
                   >
                     Abmelden
                   </button>

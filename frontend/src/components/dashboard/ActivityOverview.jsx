@@ -1,6 +1,6 @@
-// frontend/src/components/dashboard/ActivityOverview.jsx - CLEANED VERSION
+// frontend/src/components/dashboard/ActivityOverview.jsx - OHNE EVENTS
 import React, { useMemo, useEffect } from 'react';
-import { Activity, MessageSquare, Mic, Gamepad2, Calendar } from 'lucide-react';
+import { Activity, MessageSquare, Mic, Gamepad2 } from 'lucide-react';
 import DatePicker from './DatePicker';
 
 // CSS Animations für die Balken - wird als Style-Tag eingefügt
@@ -69,12 +69,12 @@ const ActivityOverview = ({
   useEffect(() => {
     injectAnimationStyles();
   }, []);
-  // ✅ Konsistente Kategorien-Definition
+
+  // ✅ OHNE EVENTS: Nur 3 Kategorien
   const categories = [
     { id: 'messages', label: 'Nachrichten', icon: MessageSquare, gradient: 'from-blue-500 to-blue-600' },
     { id: 'voice', label: 'Voice (Min)', icon: Mic, gradient: 'from-green-500 to-green-600' },
-    { id: 'gaming', label: 'Gaming (Min)', icon: Gamepad2, gradient: 'from-purple-500 to-purple-600' },
-    { id: 'events', label: 'Events', icon: Calendar, gradient: 'from-orange-500 to-orange-600' }
+    { id: 'gaming', label: 'Gaming (Min)', icon: Gamepad2, gradient: 'from-purple-500 to-purple-600' }
   ];
 
   // Daten-Verarbeitung mit garantierter Struktur
@@ -91,8 +91,7 @@ const ActivityOverview = ({
         skeleton: true,
         messages: { value: 0, change: 0 },
         voice: { value: 0, change: 0 },
-        gaming: { value: 0, change: 0 },
-        events: { value: 0, change: 0 }
+        gaming: { value: 0, change: 0 }
       }));
     }
     
@@ -101,8 +100,7 @@ const ActivityOverview = ({
       skeleton: false,
       messages: period.messages || { value: 0, change: 0 },
       voice: period.voice || { value: 0, change: 0 },
-      gaming: period.gaming || { value: 0, change: 0 },
-      events: period.events || { value: 0, change: 0 }
+      gaming: period.gaming || { value: 0, change: 0 }
     }));
   }, [activityData, activityFilter]);
 
@@ -120,7 +118,6 @@ const ActivityOverview = ({
         }
         return `${minutes}min`;
       case 'messages':
-      case 'events':
         return value > 1000 ? `${(value / 1000).toFixed(1)}k` : value.toString();
       default:
         return value.toString();
@@ -145,16 +142,14 @@ const ActivityOverview = ({
         }
       case 'messages':
         return `${value.toLocaleString()} ${value === 1 ? 'Nachricht' : 'Nachrichten'}`;
-      case 'events':
-        return `${value} ${value === 1 ? 'Event' : 'Events'}`;
       default:
         return value.toString();
     }
   };
 
-  // Statistik-Zusammenfassung mit festen Dimensionen
+  // Statistik-Zusammenfassung mit festen Dimensionen - OHNE EVENTS
   const StatsSummary = () => (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
       {categories.map((category) => {
         const Icon = category.icon;
         const values = currentData.map(period => period[category.id]?.value || 0);
@@ -169,14 +164,14 @@ const ActivityOverview = ({
         return (
           <div 
             key={`summary-${category.id}`} 
-            className={`text-center p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all duration-200 ${
+            className={`text-center p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 ${
               isSkeletonMode ? 'animate-pulse' : ''
             } ${
               isDarkMode 
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700' 
-                : 'bg-gradient-to-br from-white to-gray-50 border-gray-200 hover:from-gray-50 hover:to-gray-100'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900' 
+                : 'bg-gradient-to-br from-white to-gray-50 hover:from-gray-50 hover:to-gray-100'
             }`}
-            style={{ minHeight: '140px' }}
+            style={{ minHeight: '140px', border: 'none' }}
           >
             <div className={`inline-flex p-3 rounded-xl bg-gradient-to-r ${category.gradient} mb-3 shadow-lg`}>
               <Icon className="w-6 h-6 text-white" />
@@ -220,14 +215,14 @@ const ActivityOverview = ({
     </div>
   );
 
-  // Balken-Chart mit verbesserter Darstellung und Tooltips
+  // Balken-Chart mit verbesserter Darstellung und Tooltips - OHNE EVENTS
   const ActivityChart = () => {
     return (
       <div className="space-y-8">
         {categories.map((category) => {
           const Icon = category.icon;
           const values = currentData.map(period => period[category.id]?.value || 0);
-          const maxValue = Math.max(...values, 1); // Verhindere Division durch 0
+          const maxValue = Math.max(...values, 1);
           const isSkeletonMode = loading || currentData[0]?.skeleton;
           
           return (
@@ -257,7 +252,6 @@ const ActivityOverview = ({
                   {currentData.map((period, index) => {
                     const value = period[category.id]?.value || 0;
                     const change = period[category.id]?.change || 0;
-                    // Verbesserte Höhenberechnung mit Mindesthöhe für bessere Sichtbarkeit
                     const height = maxValue > 0 ? Math.max((value / maxValue) * 100, value > 0 ? 8 : 0) : 0;
                     
                     return (
@@ -278,36 +272,33 @@ const ActivityOverview = ({
                               '--final-height': `${height}%`,
                               height: `${height}%`,
                               minHeight: value > 0 ? '6px' : '2px',
-                              opacity: isSkeletonMode ? 0.7 : 1
+                              opacity: isSkeletonMode ? 0.6 : 1
                             }}
                           >
-                            {/* Shimmer-Effekt beim Hover */}
-                            {!isSkeletonMode && (
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out shimmer-effect opacity-0 group-hover:opacity-100" />
+                            {/* Shimmer-Effekt für Skeleton */}
+                            {isSkeletonMode && (
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent shimmer-effect"></div>
                             )}
                             
-                            {/* Pulsierender Highlight am oberen Rand */}
+                            {/* Glanz-Effekt für echte Daten */}
                             {!isSkeletonMode && value > 0 && (
-                              <div className="absolute top-0 left-0 right-0 h-1 bg-white/40 rounded-t-lg animate-pulse" 
-                                   style={{ animationDuration: '2s', animationDelay: '0.5s' }} />
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" style={{animationDuration: "3s"}}></div>
                             )}
                           </div>
                           
-                          {/* Verbesserter Hover-Tooltip */}
+                          {/* Tooltip bei Hover */}
                           {!isSkeletonMode && (
-                            <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-20">
-                              <div className={`px-3 py-2 rounded-lg text-sm font-medium shadow-xl border ${
-                                themeClasses.cardBg
-                              } ${themeClasses.text} ${themeClasses.cardBorder}`}>
-                                <div className="text-center">
-                                  <div className="font-bold text-base">
-                                    {formatDetailedValue(category.id, value)}
+                            <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20">
+                              <div className={`px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap shadow-lg ${
+                                isDarkMode ? 'bg-gray-800 text-white border border-gray-600' : 'bg-white text-gray-900 border border-gray-200'
+                              }`}>
+                                <div className="font-semibold">{formatDetailedValue(category.id, value)}</div>
+                                {change !== 0 && (
+                                  <div className={`text-xs ${change > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {change > 0 ? '+' : ''}{formatValue(category.id, change)} vs. vorher
                                   </div>
-                                  <div className={`text-xs mt-1 ${themeClasses.textTertiary}`}>
-                                    {period.label}
-                                  </div>
-                                </div>
-                                {/* Tooltip Arrow */}
+                                )}
+                                {/* Pfeil */}
                                 <div className={`absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${
                                   isDarkMode ? 'border-t-gray-800' : 'border-t-white'
                                 }`}></div>
@@ -328,26 +319,6 @@ const ActivityOverview = ({
                     );
                   })}
                 </div>
-                
-                {/* Y-Achsen-Hilfslinie für bessere Orientierung */}
-                {!isSkeletonMode && maxValue > 0 && (
-                  <div className="absolute left-0 top-0 bottom-6 w-full pointer-events-none">
-                    {/* 50% Linie */}
-                    <div className="absolute left-0 right-0 border-t border-gray-200 dark:border-gray-700 opacity-30" 
-                         style={{ top: '50%' }}>
-                      <span className={`absolute -left-2 -top-3 text-xs ${themeClasses.textTertiary}`}>
-                        {formatValue(category.id, Math.round(maxValue * 0.5))}
-                      </span>
-                    </div>
-                    {/* 100% Linie */}
-                    <div className="absolute left-0 right-0 border-t border-gray-200 dark:border-gray-700 opacity-30" 
-                         style={{ top: '0%' }}>
-                      <span className={`absolute -left-2 -top-3 text-xs ${themeClasses.textTertiary}`}>
-                        {formatValue(category.id, maxValue)}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           );
@@ -357,7 +328,7 @@ const ActivityOverview = ({
   };
 
   return (
-    <div className={`${themeClasses.cardBg} rounded-3xl border ${themeClasses.cardBorder} shadow-xl`} style={{ minHeight: '600px' }}>
+    <div className={`${themeClasses.cardBg} rounded-3xl shadow-xl`} style={{ minHeight: '600px', border: 'none' }}>
       {/* Header mit fester Höhe */}
       <div className="p-6 border-b border-gray-200 dark:border-gray-700" style={{ minHeight: '100px' }}>
         <div className="flex items-center justify-between">
@@ -371,8 +342,8 @@ const ActivityOverview = ({
               </h3>
               <span className={`text-sm ${themeClasses.textSecondary}`}>
                 {activityFilter === 'daily' ? 'Letzte 7 Tage' :
-                 activityFilter === 'weekly' ? 'Letzte 5 Wochen' :
-                 activityFilter === 'monthly' ? 'Letzte 6 Monate' :
+                 activityFilter === 'weekly' ? 'Wocheübersicht' :
+                 activityFilter === 'monthly' ? 'Monatsübersicht' :
                  'Gesamte Account-Historie'}
               </span>
             </div>

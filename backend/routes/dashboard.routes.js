@@ -1,6 +1,6 @@
-// backend/routes/dashboard.routes.js - UPDATED: Mit Unterrouten
+// backend/routes/dashboard.routes.js - UPDATED: Mit discordId für Avatar-Support
 const express = require('express');
-const mongoose = require('mongoose'); // ✅ FIX: mongoose importieren
+const mongoose = require('mongoose');
 const router = express.Router();
 const User = require('../models/user.model');
 const UserActivity = require('../models/userActivity.model');
@@ -16,7 +16,7 @@ router.use('/activity', protect, activityRoutes);
 router.use('/gaming', protect, gamingRoutes);
 router.use('/social', protect, socialRoutes);
 
-// ✅ SIMPLIFIED: Haupt-Dashboard Overview (nur Basis-Daten)
+// ✅ SIMPLIFIED: Haupt-Dashboard Overview (nur Basis-Daten) - FIXED: Avatar-Daten
 router.get('/overview', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-accessToken -refreshToken');
@@ -24,31 +24,40 @@ router.get('/overview', protect, async (req, res) => {
       return res.status(404).json({ message: 'Benutzer nicht gefunden' });
     }
 
-    // Benutzer-Grunddaten
+    // ✅ FIXED: Vollständige Benutzer-Grunddaten mit Discord-Infos für Avatar
     const userData = {
       id: user._id,
       username: user.username,
-      avatar: user.avatar,
+      discordId: user.discordId, // ✅ FIX: Für Avatar-URLs benötigt
+      avatar: user.avatar,        // ✅ FIX: Avatar-Hash von Discord
+      discriminator: user.discriminator, // ✅ FIX: Discord Discriminator
       level: user.level || 1,
       xp: user.xp || 0,
       xpToNext: user.xpToNext || 1000,
+      xpFromMessages: user.xpBreakdown?.messages || 0,
+      xpFromGames: user.xpBreakdown?.games || 0,
+      xpFromAchievements: user.xpBreakdown?.achievements || 0,
       rank: user.rank || 'Bronze',
       rankColor: user.rankColor || 'from-gray-400 to-gray-600',
       joinDate: user.createdAt,
       lastActive: user.stats?.lastSeen || new Date(),
-      roles: user.roles || ['member']
+      roles: user.roles || ['member'],
+      isOnline: user.isOnline || false, // ✅ FIX: Online-Status für Avatar
+      
+      // ✅ ZUSÄTZLICHE Discord-Infos falls vorhanden
+      email: user.email || null,
+      guilds: user.guilds || []
     };
 
-    // Basis Dashboard-Statistiken (für Stat-Cards)
+    // Basis Dashboard-Statistiken (für Stat-Cards) - OHNE EVENTS
     const dashboardStats = {
       totalMessages: user.stats?.messagesCount || 0,
       voiceHours: Math.floor((user.stats?.voiceMinutes || 0) / 60),
       gamesPlayed: user.stats?.gamesPlayed || 0,
-      eventsAttended: user.stats?.eventsAttended || 0,
       achievementsUnlocked: user.achievements?.length || 0,
       friendsOnline: 0, // Wird über /social/friends geholt
       
-      // Basis Weekly Progress (vereinfacht)
+      // Basis Weekly Progress (vereinfacht) - OHNE EVENTS
       weeklyProgress: await calculateBasicWeeklyProgress(user._id)
     };
 
@@ -71,59 +80,37 @@ router.get('/overview', protect, async (req, res) => {
   }
 });
 
-// ✅ HELPER: Basis Weekly Progress (schnell und einfach)
+// ✅ HELPER: Basis Weekly Progress berechnen - OHNE EVENTS
 async function calculateBasicWeeklyProgress(userId) {
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  
   try {
-    const weeklyActivity = await UserActivity.aggregate([
-      {
-        $match: {
-          userId: userId,
-          timestamp: { $gte: weekAgo }
-        }
-      },
-      {
-        $group: {
-          _id: '$activityType',
-          count: { $sum: 1 },
-          totalDuration: { 
-            $sum: { 
-              $ifNull: ['$metadata.duration', 0] 
-            }
-          }
-        }
-      }
-    ]);
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
 
-    const progress = {
-      messages: 0,
-      voiceTime: 0,
-      gamesPlayed: 0
-    };
-
-    weeklyActivity.forEach(activity => {
-      switch(activity._id) {
-        case 'MESSAGE':
-          progress.messages = activity.count;
-          break;
-        case 'VOICE_LEAVE':
-          progress.voiceTime = activity.totalDuration;
-          break;
-        case 'GAME_END':
-          progress.gamesPlayed = activity.count;
-          break;
-      }
+    const weeklyActivities = await UserActivity.find({
+      userId: userId,
+      timestamp: { $gte: startOfWeek }
     });
 
-    return progress;
+    const weeklyStats = {
+      messages: weeklyActivities.filter(a => a.activityType === 'message').length,
+      voiceMinutes: weeklyActivities
+        .filter(a => a.activityType === 'voice')
+        .reduce((sum, a) => sum + (a.metadata?.duration || 0), 0),
+      gamesPlayed: weeklyActivities.filter(a => a.activityType === 'gaming').length,
+      xpGained: weeklyActivities.reduce((sum, a) => sum + (a.xpGained || 0), 0)
+    };
+
+    return weeklyStats;
   } catch (error) {
     console.error('Error calculating weekly progress:', error);
-    return { messages: 0, voiceTime: 0, gamesPlayed: 0 };
+    return {
+      messages: 0,
+      voiceMinutes: 0,
+      gamesPlayed: 0,
+      xpGained: 0
+    };
   }
 }
 
 module.exports = router;
-
-
