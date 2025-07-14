@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import Navigation from '../../components/dashboard/Navigation';
 import UserAvatar from '../../components/common/UserAvatar';
+import ActivityOverview from '../../components/dashboard/ActivityOverview';
 import { 
   Users, Crown, Activity, TrendingUp, Calendar, 
   Search, Filter, MoreVertical, Edit, Trash2, 
@@ -13,17 +14,15 @@ import {
 const AdminDashboard = () => {
   const { user } = useAuth();
   
-  // States für Admin Panel
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedUsers, setSelectedUsers] = useState([]);
-  const [userSearchTerm, setUserSearchTerm] = useState('');
-  const [userFilterRole, setUserFilterRole] = useState('all');
-  const [sortField, setSortField] = useState('joinDate');
-  const [sortOrder, setSortOrder] = useState('desc');
-
   // Navigation States (für die Dashboard Navigation)
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [activeNavItem, setActiveNavItem] = useState('admin');
+
+  // Activity States (für die Aktivitätsübersicht)
+  const [activityFilter, setActivityFilter] = useState('weekly');
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   // Theme classes (gleiche wie im Dashboard)
   const themeClasses = {
@@ -37,7 +36,7 @@ const AdminDashboard = () => {
     navBorder: isDarkMode ? 'border-gray-700' : 'border-gray-200'
   };
 
-  // Simulierte Daten - später durch echte API-Calls ersetzen
+  // Simulierte Daten für Admin Dashboard (später durch echte API-Calls ersetzen)
   const [stats, setStats] = useState({
     totalMembers: 245,
     newThisWeek: 12,
@@ -45,6 +44,55 @@ const AdminDashboard = () => {
     totalEvents: 156,
     growthRate: 8.5
   });
+
+  // Simulierte Community-weite Aktivitätsdaten
+  const [communityActivityData] = useState([
+    {
+      id: 'week-1',
+      label: 'KW 25',
+      date: '2024-06-17',
+      messages: { value: 2847, change: 12 },
+      voice: { value: 1456, change: -5 },
+      gaming: { value: 2103, change: 23 },
+      events: { value: 8, change: 0 }
+    },
+    {
+      id: 'week-2', 
+      label: 'KW 26',
+      date: '2024-06-24',
+      messages: { value: 3156, change: 11 },
+      voice: { value: 1623, change: 11 },
+      gaming: { value: 2387, change: 14 },
+      events: { value: 12, change: 50 }
+    },
+    {
+      id: 'week-3',
+      label: 'KW 27', 
+      date: '2024-07-01',
+      messages: { value: 2934, change: -7 },
+      voice: { value: 1789, change: 10 },
+      gaming: { value: 2698, change: 13 },
+      events: { value: 15, change: 25 }
+    },
+    {
+      id: 'week-4',
+      label: 'KW 28',
+      date: '2024-07-08', 
+      messages: { value: 3421, change: 17 },
+      voice: { value: 1945, change: 9 },
+      gaming: { value: 2845, change: 5 },
+      events: { value: 18, change: 20 }
+    },
+    {
+      id: 'week-5',
+      label: 'KW 29',
+      date: '2024-07-15',
+      messages: { value: 3678, change: 8 },
+      voice: { value: 2134, change: 10 },
+      gaming: { value: 3102, change: 9 },
+      events: { value: 22, change: 22 }
+    }
+  ]);
 
   const [memberGrowthData] = useState([
     { month: 'Jan', members: 180 },
@@ -55,30 +103,14 @@ const AdminDashboard = () => {
     { month: 'Jun', members: 245 }
   ]);
 
-  const [activityData] = useState([
-    { day: 'Mo', logins: 45, messages: 234, gameTime: 156 },
-    { day: 'Di', logins: 52, messages: 189, gameTime: 178 },
-    { day: 'Mi', logins: 48, messages: 267, gameTime: 145 },
-    { day: 'Do', logins: 61, messages: 298, gameTime: 189 },
-    { day: 'Fr', logins: 89, messages: 456, gameTime: 234 },
-    { day: 'Sa', logins: 78, messages: 398, gameTime: 267 },
-    { day: 'So', logins: 67, messages: 345, gameTime: 198 }
-  ]);
-
-  const [users, setUsers] = useState([
+  const [topUsers] = useState([
     {
       id: 1,
       discordId: '123456789',
       username: 'GamerPro2024',
       avatar: null,
-      email: 'gamer@example.com',
-      roles: ['member'],
       level: 15,
       xp: 2450,
-      joinDate: '2024-01-15',
-      lastActive: '2024-07-13T10:30:00',
-      status: 'online',
-      totalGameTime: 156,
       eventsJoined: 12
     },
     {
@@ -86,14 +118,8 @@ const AdminDashboard = () => {
       discordId: '987654321',
       username: 'AdminMaster',
       avatar: null,
-      email: 'admin@example.com',
-      roles: ['admin', 'member'],
       level: 25,
       xp: 4200,
-      joinDate: '2023-11-20',
-      lastActive: '2024-07-13T11:45:00',
-      status: 'online',
-      totalGameTime: 289,
       eventsJoined: 28
     },
     {
@@ -101,14 +127,8 @@ const AdminDashboard = () => {
       discordId: '456789123',
       username: 'CasualGamer',
       avatar: null,
-      email: 'casual@example.com',
-      roles: ['member'],
       level: 8,
       xp: 1200,
-      joinDate: '2024-03-10',
-      lastActive: '2024-07-12T18:20:00',
-      status: 'offline',
-      totalGameTime: 67,
       eventsJoined: 5
     },
     {
@@ -116,69 +136,63 @@ const AdminDashboard = () => {
       discordId: '789123456',
       username: 'EventOrganizer',
       avatar: null,
-      email: 'events@example.com',
-      roles: ['moderator', 'member'],
       level: 18,
       xp: 3100,
-      joinDate: '2023-12-05',
-      lastActive: '2024-07-13T09:15:00',
-      status: 'away',
-      totalGameTime: 198,
       eventsJoined: 45
+    },
+    {
+      id: 5,
+      discordId: '111222333',
+      username: 'VoiceChatter',
+      avatar: null,
+      level: 12,
+      xp: 1890,
+      eventsJoined: 8
     }
   ]);
 
-  const [roles] = useState([
-    { id: 'member', name: 'Member', color: '#6B7280', permissions: ['read_messages', 'join_events'] },
-    { id: 'moderator', name: 'Moderator', color: '#F59E0B', permissions: ['read_messages', 'join_events', 'moderate_chat', 'manage_events'] },
-    { id: 'admin', name: 'Admin', color: '#EF4444', permissions: ['read_messages', 'join_events', 'moderate_chat', 'manage_events', 'manage_users', 'system_settings'] }
-  ]);
-
-  // Filter und Sortierung der Benutzer
-  const filteredAndSortedUsers = users
-    .filter(user => {
-      const matchesSearch = user.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-                           user.email.toLowerCase().includes(userSearchTerm.toLowerCase());
-      const matchesRole = userFilterRole === 'all' || user.roles.includes(userFilterRole);
-      return matchesSearch && matchesRole;
-    })
-    .sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
-      const multiplier = sortOrder === 'asc' ? 1 : -1;
-      
-      if (typeof aValue === 'string') {
-        return aValue.localeCompare(bValue) * multiplier;
-      }
-      return (aValue - bValue) * multiplier;
-    });
-
-  // Benutzer-Auswahl verwalten
-  const toggleUserSelection = (userId) => {
-    setSelectedUsers(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    );
+  // Activity Handler für Community-weite Daten
+  const handleActivityFilterChange = async (newFilter) => {
+    setActivityLoading(true);
+    setActivityFilter(newFilter);
+    
+    // Simuliere API-Call für Community-weite Aktivitätsdaten
+    setTimeout(() => {
+      setActivityLoading(false);
+    }, 800);
   };
 
-  const selectAllUsers = () => {
-    setSelectedUsers(filteredAndSortedUsers.map(user => user.id));
+  // Navigation Handler für Wochen/Monate
+  const navigateWeek = (direction) => {
+    const newWeek = new Date(selectedWeek);
+    if (direction === 'prev') {
+      newWeek.setDate(newWeek.getDate() - 7);
+    } else {
+      newWeek.setDate(newWeek.getDate() + 7);
+    }
+    setSelectedWeek(newWeek);
   };
 
-  const clearSelection = () => {
-    setSelectedUsers([]);
+  const navigateMonth = (direction) => {
+    const newMonth = new Date(selectedMonth);
+    if (direction === 'prev') {
+      newMonth.setMonth(newMonth.getMonth() - 1);
+    } else {
+      newMonth.setMonth(newMonth.getMonth() + 1);
+    }
+    setSelectedMonth(newMonth);
   };
 
-  // Tab-Navigation für Admin Panel
-  const tabs = [
-    { id: 'dashboard', name: 'Dashboard', icon: BarChart3 },
-    { id: 'users', name: 'Benutzerverwaltung', icon: Users },
-    { id: 'roles', name: 'Rollen & Berechtigungen', icon: Shield }
-  ];
+  const goToCurrentWeek = () => {
+    setSelectedWeek(new Date());
+  };
 
-  const renderDashboardTab = () => (
-    <div className="space-y-6">
+  const goToCurrentMonth = () => {
+    setSelectedMonth(new Date());
+  };
+
+  const renderDashboardContent = () => (
+    <div className="space-y-8">
       {/* Statistik-Karten */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className={`${themeClasses.cardBg} rounded-2xl p-6 shadow-lg border ${themeClasses.cardBorder}`}>
@@ -234,9 +248,41 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* Charts */}
+      {/* Community-weite Aktivitätsübersicht */}
+      <div className="relative">
+        <h2 className={`text-2xl font-bold ${themeClasses.text} mb-6`}>
+          Community-Aktivität
+        </h2>
+        
+        {/* Loading Overlay für Activity Updates */}
+        {activityLoading && (
+          <div className="absolute inset-0 bg-black/20 rounded-3xl z-10 flex items-center justify-center">
+            <div className={`${themeClasses.cardBg} rounded-lg p-4 shadow-lg`}>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+              <p className={`mt-2 text-sm ${themeClasses.text}`}>Lade Community-Daten...</p>
+            </div>
+          </div>
+        )}
+        
+        <ActivityOverview
+          activityFilter={activityFilter}
+          setActivityFilter={handleActivityFilterChange}
+          activityData={communityActivityData}
+          userJoinDate={null} // Nicht relevant für Community-Daten
+          themeClasses={themeClasses}
+          isDarkMode={isDarkMode}
+          loading={activityLoading}
+          selectedWeek={selectedWeek}
+          selectedMonth={selectedMonth}
+          navigateWeek={navigateWeek}
+          navigateMonth={navigateMonth}
+          goToCurrentWeek={goToCurrentWeek}
+          goToCurrentMonth={goToCurrentMonth}
+        />
+      </div>
+
+      {/* Mitglieder-Wachstum Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Mitglieder-Wachstum */}
         <div className={`${themeClasses.cardBg} rounded-2xl p-6 shadow-lg border ${themeClasses.cardBorder}`}>
           <div className="flex items-center justify-between mb-6">
             <h3 className={`text-lg font-semibold ${themeClasses.text}`}>Mitglieder-Wachstum</h3>
@@ -257,41 +303,41 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Aktivitäts-Übersicht */}
+        {/* Top Contributors */}
         <div className={`${themeClasses.cardBg} rounded-2xl p-6 shadow-lg border ${themeClasses.cardBorder}`}>
           <div className="flex items-center justify-between mb-6">
-            <h3 className={`text-lg font-semibold ${themeClasses.text}`}>Wöchentliche Aktivität</h3>
+            <h3 className={`text-lg font-semibold ${themeClasses.text}`}>Top Contributors</h3>
             <button className={`${themeClasses.textSecondary} hover:${themeClasses.text}`}>
               <RefreshCw className="w-5 h-5" />
             </button>
           </div>
-          <div className="space-y-3">
-            {activityData.map((data, index) => (
-              <div key={data.day} className="flex items-center justify-between">
-                <span className={`text-sm font-medium ${themeClasses.textSecondary} w-8`}>{data.day}</span>
-                <div className="flex-1 mx-4">
-                  <div className="flex space-x-1">
-                    <div className={`flex-1 ${themeClasses.cardBg} rounded-full h-2`}>
-                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${(data.logins / 100) * 100}%` }}></div>
+          <div className="space-y-4">
+            {topUsers.slice(0, 5).map((user, index) => (
+              <div key={user.id} className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                    index === 0 ? 'bg-yellow-500 text-white' :
+                    index === 1 ? 'bg-gray-400 text-white' :
+                    index === 2 ? 'bg-orange-600 text-white' :
+                    'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <UserAvatar user={user} size="sm" showBorder={true} />
+                  <div>
+                    <div className={`text-sm font-medium ${themeClasses.text}`}>
+                      {user.username}
                     </div>
-                    <div className={`flex-1 ${themeClasses.cardBg} rounded-full h-2`}>
-                      <div className="bg-green-500 h-2 rounded-full" style={{ width: `${(data.messages / 500) * 100}%` }}></div>
+                    <div className={`text-xs ${themeClasses.textTertiary}`}>
+                      Level {user.level} • {user.xp} XP
                     </div>
                   </div>
                 </div>
-                <span className={`text-xs ${themeClasses.textTertiary}`}>{data.logins}</span>
+                <div className={`text-sm ${themeClasses.textSecondary}`}>
+                  {user.eventsJoined} Events
+                </div>
               </div>
             ))}
-          </div>
-          <div className="mt-4 flex space-x-4 text-xs">
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-              <span className={themeClasses.textSecondary}>Logins</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-              <span className={themeClasses.textSecondary}>Nachrichten</span>
-            </div>
           </div>
         </div>
       </div>
@@ -634,38 +680,8 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="mb-8">
-          <div className={`border-b ${themeClasses.cardBorder}`}>
-            <nav className="-mb-px flex space-x-8">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                      isActive
-                        ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                        : `border-transparent ${themeClasses.textSecondary} hover:${themeClasses.text} hover:border-${themeClasses.cardBorder}`
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{tab.name}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        <div>
-          {activeTab === 'dashboard' && renderDashboardTab()}
-          {activeTab === 'users' && renderUsersTab()}
-          {activeTab === 'roles' && renderRolesTab()}
-        </div>
+        {/* Dashboard Content */}
+        {renderDashboardContent()}
       </div>
     </div>
   );
